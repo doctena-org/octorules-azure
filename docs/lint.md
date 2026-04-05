@@ -1,6 +1,6 @@
 # Lint Rule Reference
 
-`octorules lint` performs offline static analysis of your Azure WAF rules files. **68 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
+`octorules lint` performs offline static analysis of your Azure WAF rules files. **70 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
@@ -52,6 +52,7 @@ azure_waf_custom_rules:
 | AZ100 | ERROR | priority | Priority must be a positive integer |
 | AZ101 | ERROR | priority | Duplicate priority across rules |
 | AZ102 | INFO | priority | Non-contiguous rule priorities |
+| AZ103 | WARNING | priority | Priority out of valid range for this WAF type (Front Door) |
 | AZ200 | ERROR | action | Invalid action type |
 | AZ201 | ERROR | action | Action not supported on this WAF type |
 | AZ300 | ERROR | match | `matchConditions` must be non-empty list of dicts |
@@ -83,6 +84,7 @@ azure_waf_custom_rules:
 | AZ335 | WARNING | match | Empty string in matchValue |
 | AZ336 | WARNING | match | Duplicate variable+operator in rule |
 | AZ337 | WARNING | match | CIDR has host bits set |
+| AZ338 | WARNING | match | Redundant CIDR in matchValue (already covered by a broader range) |
 | AZ340 | WARNING | match | Catch-all rule |
 | AZ341 | WARNING | match | Unreachable rule after catch-all |
 | AZ400 | ERROR | rate_limit | Invalid rateLimitDurationInMinutes |
@@ -336,6 +338,24 @@ same priority will cause a deployment error.
 
 Info-level notice when there are gaps in priority numbering (e.g., 1, 2, 5).
 Not an error, but may indicate a deleted rule that should be cleaned up.
+
+### AZ103 -- Priority out of valid range for Front Door WAF
+
+**Severity:** WARNING
+
+Azure Front Door WAF requires custom rule priorities in the range 1–100. Priorities above 100 are accepted by the App Gateway API but rejected by Front Door at deployment time.
+
+**Triggers on:**
+
+```yaml
+# config.yaml: waf_type: front_door
+  - ref: LowPriorityRule
+    priority: 150             # <-- exceeds Front Door maximum of 100
+    action: Block
+    matchConditions: [...]
+```
+
+**Fix:** Assign a priority between 1 and 100.
 
 ---
 
@@ -833,6 +853,32 @@ matchConditions:
 ```
 
 **Fix:** Replace with the normalised network address shown in the warning.
+
+### AZ338 -- Redundant CIDR in matchValue
+
+**Severity:** WARNING
+
+A CIDR in `matchValue` is already fully covered by a broader CIDR in the same
+condition. The narrower range is redundant and can be removed without changing
+the rule's behaviour.
+
+**Triggers on:**
+
+```yaml
+matchConditions:
+  - matchVariable: RemoteAddr
+    operator: IPMatch
+    matchValue:
+      - "10.0.0.0/8"
+      - "10.1.2.0/24"   # <-- redundant: already covered by 10.0.0.0/8
+```
+
+**Fix:** Remove the narrower CIDR:
+
+```yaml
+    matchValue:
+      - "10.0.0.0/8"
+```
 
 ### AZ340 -- Catch-all rule matches all traffic
 

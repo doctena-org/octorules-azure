@@ -213,7 +213,7 @@ The adapter pattern handles all API differences transparently. Users write ident
 
 ## Linting
 
-68 lint rules with `AZ` prefix covering structure, priority, action, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets. See [`docs/lint.md`](docs/lint.md) for the full reference with examples.
+70 lint rules with `AZ` prefix covering structure, priority, action, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets. See [`docs/lint.md`](docs/lint.md) for the full reference with examples.
 
 ```bash
 octorules lint --config config.yaml
