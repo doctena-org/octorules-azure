@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "octorules-azure"
+version = "0.1.0"
+description = "Azure WAF provider for octorules"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+readme = "README.md"
+authors = [
+    { name = "Martin Simon" },
+    { name = "Doctena S.A." },
+]
+keywords = ["azure", "waf", "front-door", "application-gateway", "rules", "iac", "octorules"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking :: Firewalls",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "octorules>=0.23.0",
+    "azure-identity>=1.14,<2.0",
+    "azure-mgmt-frontdoor>=1.1,<2.0",
+    "azure-mgmt-network>=25.0,<27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4.0",
+    "yamllint>=1.35.0",
+    "build",
+]
+
+[project.urls]
+Homepage = "https://github.com/doctena-org/octorules-azure"
+Repository = "https://github.com/doctena-org/octorules-azure"
+Issues = "https://github.com/doctena-org/octorules-azure/issues"
+
+[project.entry-points."octorules.providers"]
+azure = "octorules_azure:AzureWafProvider"
+
+[tool.setuptools.packages.find]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use intentional unicode chars and regex metacharacters in match= patterns.
+"tests/*" = ["RUF002", "RUF043"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
