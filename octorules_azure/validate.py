@@ -51,7 +51,7 @@ _NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 _VALID_ACTIONS = frozenset({"Allow", "Block", "Log", "Redirect", "AnomalyScoring", "JSChallenge"})
 
 # waf_type-aware validation: features restricted to one WAF type.
-_FD_ONLY_ACTIONS = frozenset({"Redirect", "AnomalyScoring", "JSChallenge"})
+_FD_ONLY_ACTIONS = frozenset({"Redirect", "AnomalyScoring"})
 _FD_ONLY_OPERATORS = frozenset({"ServiceTagMatch"})
 _FD_ONLY_VARIABLES = frozenset({"SocketAddr"})
 _AG_ONLY_TRANSFORMS = frozenset({"HtmlEntityDecode"})
@@ -103,6 +103,7 @@ _VALID_OPERATORS = frozenset(
         "BeginsWith",
         "EndsWith",
         "RegEx",
+        # Not in current SDK (FD 1.2.0 / AG 26.0.0); forward-looking
         "ServiceTagMatch",
     }
 )
@@ -1483,7 +1484,12 @@ _VALID_RULE_SET_TYPES = frozenset(
 _VALID_RULE_SET_ACTIONS = frozenset({"Block", "Log", "Redirect"})
 
 # Valid actions for individual managed rule overrides.
-_VALID_OVERRIDE_ACTIONS = frozenset({"Allow", "Block", "Log", "Redirect", "AnomalyScoring"})
+_VALID_OVERRIDE_ACTIONS = frozenset(
+    {"Allow", "Block", "Log", "Redirect", "AnomalyScoring", "None", "JSChallenge"}
+)
+
+# Override actions restricted to Front Door (not valid for App Gateway).
+_FD_ONLY_OVERRIDE_ACTIONS = frozenset({"Redirect"})
 
 
 def _check_managed_ref(rule: dict, results: list[LintResult], phase: str) -> str:
@@ -1664,6 +1670,19 @@ def _check_managed_rule_override(
                     Severity.ERROR,
                     f"{path}: invalid action {action!r}; expected one of: "
                     f"{', '.join(sorted(_VALID_OVERRIDE_ACTIONS))}",
+                    phase,
+                    ref=ref,
+                    field=f"{path}.action",
+                )
+            )
+        # AZ708: FD-only override action used with App Gateway
+        elif _WAF_TYPE.get() == "app_gateway" and action in _FD_ONLY_OVERRIDE_ACTIONS:
+            results.append(
+                _result(
+                    "AZ708",
+                    Severity.WARNING,
+                    f"{path}: action {action!r} is only supported on"
+                    " Front Door, not Application Gateway",
                     phase,
                     ref=ref,
                     field=f"{path}.action",

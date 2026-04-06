@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] - 2026-04-06
+
+### Added
+- **AZ708** (WARNING): FD-only managed rule override action used with
+  Application Gateway — fires when `Redirect` is used as an override action
+  with `waf_type: app_gateway`.
+- `None` and `JSChallenge` added to valid managed rule override actions.
+- `js_challenge_cookie_expiration_in_mins` policy setting support.
+- `file_upload_enforcement` AG-only boolean policy setting support.
+
+### Changed
+- `Redirect` is now the only FD-only override action (previously all three
+  of `Redirect`, `AnomalyScoring`, `JSChallenge` were blocked on AG for
+  custom rule actions; override actions now have their own validation).
+- `JSChallenge` is no longer FD-only for custom rule actions — removed from
+  `_FD_ONLY_ACTIONS`.
+
 ## [0.1.0] - 2026-04-05
 
 ### Added

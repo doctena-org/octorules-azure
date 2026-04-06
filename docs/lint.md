@@ -1,6 +1,6 @@
 # Lint Rule Reference
 
-`octorules lint` performs offline static analysis of your Azure WAF rules files. **70 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
+`octorules lint` performs offline static analysis of your Azure WAF rules files. **71 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
@@ -109,6 +109,7 @@ azure_waf_custom_rules:
 | AZ705 | WARNING | managed | ruleSetAction not supported on this WAF type |
 | AZ706 | ERROR | managed | Missing or invalid ruleId in rule override |
 | AZ707 | ERROR | managed | Invalid action in rule override |
+| AZ708 | WARNING | managed | FD-only managed rule override action used with App Gateway |
 
 ---
 
@@ -377,16 +378,16 @@ The `action` field must be one of: `Allow`, `Block`, `Log`, `Redirect`,
 
 **Fix:** Use `Block` instead of `Deny`.
 
-Note: `Redirect` and `AnomalyScoring` are Front Door only. `JSChallenge`
-requires Front Door Premium tier. See AZ201 for waf_type-aware validation.
+Note: `Redirect` and `AnomalyScoring` are Front Door only.
+See AZ201 for waf_type-aware validation.
 
 ### AZ201 -- Action not supported on this WAF type
 
 **Severity:** ERROR
 
-Fires when a Front Door-only action (`Redirect`, `AnomalyScoring`,
-`JSChallenge`) is used with `waf_type: app_gateway`. These actions will be
-rejected by the App Gateway API at deployment time.
+Fires when a Front Door-only action (`Redirect`, `AnomalyScoring`) is used
+with `waf_type: app_gateway`. These actions will be rejected by the App
+Gateway API at deployment time.
 
 **Triggers on:**
 
@@ -1332,4 +1333,26 @@ The `action` field in a managed rule override must be one of: `Allow`,
             action: Deny             # <-- not a valid override action
 ```
 
-**Fix:** Use `Allow`, `Block`, `Log`, `Redirect`, or `AnomalyScoring`.
+**Fix:** Use `Allow`, `Block`, `Log`, `Redirect`, `AnomalyScoring`, `None`, or `JSChallenge`.
+
+### AZ708 -- FD-only managed rule override action used with App Gateway
+
+**Severity:** WARNING
+
+Fires when a Front Door-only override action is used with `waf_type: app_gateway`. Currently, `Redirect` is the only override action restricted to Front Door.
+
+**Triggers on:**
+
+```yaml
+azure_waf_managed_rules:
+  - ref: DefaultRuleSet
+    ruleSetType: Microsoft_DefaultRuleSet
+    ruleSetVersion: "2.1"
+    ruleGroupOverrides:
+      - ruleGroupName: SQLI
+        rules:
+          - ruleId: "942100"
+            action: Redirect            # <-- FD-only override action
+```
+
+**Fix:** Use `Allow`, `Block`, or `Log` for Application Gateway managed rule overrides.

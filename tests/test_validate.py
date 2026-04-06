@@ -1286,19 +1286,27 @@ class TestWafTypeAware:
         set_waf_type("")  # Reset after each test
 
     # AZ201: FD-only actions on App Gateway
-    @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring", "JSChallenge"])
+    @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring"])
     def test_fd_only_action_on_app_gateway(self, action):
         set_waf_type("app_gateway")
         rule = make_normalised_rule(action=action)
         results = validate_rules([rule])
         assert "AZ201" in _ids(results)
 
-    @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring", "JSChallenge"])
+    @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring"])
     def test_fd_only_action_on_front_door_ok(self, action):
         set_waf_type("front_door")
         rule = make_normalised_rule(action=action)
         results = validate_rules([rule])
         assert "AZ201" not in _ids(results)
+
+    def test_jschallenge_ok_on_both(self):
+        """JSChallenge is valid on both Front Door and App Gateway."""
+        for wt in ("front_door", "app_gateway"):
+            set_waf_type(wt)
+            rule = make_normalised_rule(action="JSChallenge")
+            errors = [r for r in validate_rules([rule]) if r.rule_id == "AZ201"]
+            assert errors == [], f"JSChallenge on {wt} should not trigger AZ201"
 
     @pytest.mark.parametrize("action", ["Allow", "Block", "Log"])
     def test_common_actions_ok_on_both(self, action):

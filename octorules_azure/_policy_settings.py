@@ -116,14 +116,16 @@ def normalize_policy_settings(raw_settings: dict, waf_type: str) -> dict:
             "request_body_inspect_limit_in_kb",
             "custom_block_response_status_code",
             "custom_block_response_body",
+            "js_challenge_cookie_expiration_in_mins",
         ):
             val = raw_settings.get(key)
             if val is not None:
                 result[key] = val
-        # request_body_enforcement is AG-only (bool)
-        rbe = raw_settings.get("request_body_enforcement")
-        if rbe is not None:
-            result["request_body_enforcement"] = bool(rbe)
+        # AG-only boolean fields
+        for bool_key in ("request_body_enforcement", "file_upload_enforcement"):
+            bval = raw_settings.get(bool_key)
+            if bval is not None:
+                result[bool_key] = bool(bval)
 
     return result
 
@@ -185,6 +187,8 @@ def denormalize_policy_settings(settings: dict, waf_type: str) -> dict:
             "custom_block_response_status_code",
             "custom_block_response_body",
             "request_body_enforcement",
+            "file_upload_enforcement",
+            "js_challenge_cookie_expiration_in_mins",
         ):
             if key in settings:
                 result[key] = settings[key]

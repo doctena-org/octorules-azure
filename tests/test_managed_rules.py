@@ -1120,3 +1120,88 @@ class TestValidateRuleOverrideAction:
         )
         results = validate_managed_rules([rule])
         assert "AZ707" not in _ids(results)
+
+    def test_none_action_valid(self):
+        """'None' means use the default rule set action (valid for AG)."""
+        rule = _managed_rule_set(
+            ruleGroupOverrides=[
+                {
+                    "ruleGroupName": "SQLI",
+                    "rules": [
+                        {"ruleId": "942100", "action": "None"},
+                    ],
+                }
+            ],
+        )
+        results = validate_managed_rules([rule])
+        assert "AZ707" not in _ids(results)
+
+    def test_jschallenge_action_valid(self):
+        """JSChallenge is valid for FD managed rule overrides."""
+        rule = _managed_rule_set(
+            ruleGroupOverrides=[
+                {
+                    "ruleGroupName": "SQLI",
+                    "rules": [
+                        {"ruleId": "942100", "action": "JSChallenge"},
+                    ],
+                }
+            ],
+        )
+        results = validate_managed_rules([rule])
+        assert "AZ707" not in _ids(results)
+
+
+class TestValidateOverrideActionWafType:
+    """AZ708: FD-only override action used with App Gateway."""
+
+    def test_redirect_override_action_warns_on_ag(self):
+        set_waf_type("app_gateway")
+        rule = _managed_rule_set(
+            ruleGroupOverrides=[
+                {
+                    "ruleGroupName": "SQLI",
+                    "rules": [
+                        {"ruleId": "942100", "action": "Redirect"},
+                    ],
+                }
+            ],
+        )
+        results = validate_managed_rules([rule])
+        assert "AZ708" in _ids(results)
+        az708 = [r for r in results if r.rule_id == "AZ708"]
+        assert az708[0].severity.name == "WARNING"
+        set_waf_type("")
+
+    def test_redirect_override_action_ok_on_fd(self):
+        set_waf_type("front_door")
+        rule = _managed_rule_set(
+            ruleGroupOverrides=[
+                {
+                    "ruleGroupName": "SQLI",
+                    "rules": [
+                        {"ruleId": "942100", "action": "Redirect"},
+                    ],
+                }
+            ],
+        )
+        results = validate_managed_rules([rule])
+        assert "AZ708" not in _ids(results)
+        set_waf_type("")
+
+    def test_block_override_action_no_warn_on_ag(self):
+        """Block is valid on both WAF types — no AZ708."""
+        set_waf_type("app_gateway")
+        rule = _managed_rule_set(
+            ruleGroupOverrides=[
+                {
+                    "ruleGroupName": "SQLI",
+                    "rules": [
+                        {"ruleId": "942100", "action": "Block"},
+                    ],
+                }
+            ],
+        )
+        results = validate_managed_rules([rule])
+        assert "AZ708" not in _ids(results)
+        set_waf_type("")

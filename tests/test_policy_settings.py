@@ -126,6 +126,21 @@ class TestNormalizeAppGateway:
         result = normalize_policy_settings(raw, "app_gateway")
         assert result["request_body_enforcement"] is False
 
+    def test_ag_file_upload_enforcement(self):
+        raw = {"file_upload_enforcement": True}
+        result = normalize_policy_settings(raw, "app_gateway")
+        assert result["file_upload_enforcement"] is True
+
+    def test_ag_file_upload_enforcement_false(self):
+        raw = {"file_upload_enforcement": False}
+        result = normalize_policy_settings(raw, "app_gateway")
+        assert result["file_upload_enforcement"] is False
+
+    def test_ag_js_challenge_cookie_expiration(self):
+        raw = {"js_challenge_cookie_expiration_in_mins": 30}
+        result = normalize_policy_settings(raw, "app_gateway")
+        assert result["js_challenge_cookie_expiration_in_mins"] == 30
+
     def test_ag_ignores_fd_fields(self):
         raw = {"redirect_url": "https://example.com"}
         result = normalize_policy_settings(raw, "app_gateway")
@@ -185,6 +200,8 @@ class TestRoundTrip:
             "custom_block_response_status_code": 403,
             "custom_block_response_body": "blocked",
             "request_body_enforcement": True,
+            "file_upload_enforcement": True,
+            "js_challenge_cookie_expiration_in_mins": 30,
         }
         normalized = normalize_policy_settings(raw, "app_gateway")
         denormalized = denormalize_policy_settings(normalized, "app_gateway")
@@ -197,6 +214,8 @@ class TestRoundTrip:
         assert denormalized["custom_block_response_status_code"] == 403
         assert denormalized["custom_block_response_body"] == "blocked"
         assert denormalized["request_body_enforcement"] is True
+        assert denormalized["file_upload_enforcement"] is True
+        assert denormalized["js_challenge_cookie_expiration_in_mins"] == 30
 
 
 # ---------------------------------------------------------------------------
@@ -237,11 +256,26 @@ class TestDenormalize:
         assert result["custom_block_response_body"] == "blocked"
         assert result["request_body_enforcement"] is True
 
+    def test_ag_file_upload_enforcement(self):
+        settings = {"file_upload_enforcement": True}
+        result = denormalize_policy_settings(settings, "app_gateway")
+        assert result["file_upload_enforcement"] is True
+
+    def test_ag_js_challenge_cookie_expiration(self):
+        settings = {"js_challenge_cookie_expiration_in_mins": 30}
+        result = denormalize_policy_settings(settings, "app_gateway")
+        assert result["js_challenge_cookie_expiration_in_mins"] == 30
+
     def test_ag_new_fields_not_on_fd(self):
-        """request_body_enforcement is AG-only; should not appear in FD output."""
-        settings = {"request_body_enforcement": True}
-        result = denormalize_policy_settings(settings, "front_door")
-        assert "request_body_enforcement" not in result
+        """AG-only fields should not appear in FD output."""
+        for key in (
+            "request_body_enforcement",
+            "file_upload_enforcement",
+            "js_challenge_cookie_expiration_in_mins",
+        ):
+            settings = {key: True}
+            result = denormalize_policy_settings(settings, "front_door")
+            assert key not in result, f"{key} should not appear in FD output"
 
     def test_empty(self):
         assert denormalize_policy_settings({}, "front_door") == {}
