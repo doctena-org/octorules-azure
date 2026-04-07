@@ -293,10 +293,12 @@ class AzureWafProvider:
     @_wrap_provider_errors
     def list_zones(self) -> list[str]:
         """List all WAF policy names in the resource group."""
-        return self._retry_transient(
+        result = self._retry_transient(
             lambda: self._adapter.list_policies(self._client, self._resource_group),
             label="list zones",
         )
+        log.debug("list_zones: %d policies in %s", len(result), self._resource_group)
+        return result
 
     # -- Phase rules --
 
@@ -388,6 +390,7 @@ class AzureWafProvider:
         if not phases_to_fetch:
             return PhaseRulesResult({}, failed_phases=[])
 
+        log.debug("Fetching %d phase(s) for %s", len(phases_to_fetch), scope.zone_id)
         try:
             policy = self._retry_transient(
                 lambda: self._adapter.get_policy(self._client, self._resource_group, scope.zone_id),
@@ -519,6 +522,7 @@ class AzureWafProvider:
             label=f"get_policy_settings {scope.zone_id}",
         )
         raw_settings = policy.get("policy_settings") or {}
+        log.debug("GET policy_settings %s", scope.zone_id)
         return normalize_policy_settings(raw_settings, self._waf_type)
 
     @_wrap_provider_errors
@@ -548,7 +552,9 @@ class AzureWafProvider:
             lambda: self._adapter.get_policy(self._client, self._resource_group, scope.zone_id),
             label=f"get_managed_exclusions {scope.zone_id}",
         )
-        return normalize_managed_exclusions(policy)
+        result = normalize_managed_exclusions(policy)
+        log.debug("GET managed_exclusions %s: %d exclusions", scope.zone_id, len(result))
+        return result
 
     @_wrap_provider_errors
     def update_managed_exclusions(self, scope: Scope, exclusions: list[dict]) -> None:
