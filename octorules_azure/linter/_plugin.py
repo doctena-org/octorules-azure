@@ -78,6 +78,9 @@ def _check_total_rule_count(rules_data: dict[str, Any], ctx: LintContext) -> Non
             continue
         if phase_name not in PHASE_BY_NAME:
             continue
+        # Managed rule sets are not subject to the 100-custom-rule limit.
+        if phase_name == "azure_waf_managed_rules":
+            continue
         if not isinstance(rules, list):
             continue
         total += len(rules)

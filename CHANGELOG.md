@@ -2,14 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.1] - 2026-04-06
+## [0.1.2] - 2026-04-07
 
 ### Added
 - **AZ708** (WARNING): FD-only managed rule override action used with
   Application Gateway — fires when `Redirect` is used as an override action
   with `waf_type: app_gateway`.
+
+### Fixed
+- AZ501 no longer counts managed rule sets toward the 100-custom-rule limit
+  (only `azure_waf_custom_rules` and `azure_waf_rate_rules` are counted).
+
+## [0.1.1] - 2026-04-06
+
+### Added
 - `None` and `JSChallenge` added to valid managed rule override actions.
 - `js_challenge_cookie_expiration_in_mins` policy setting support.
 - `file_upload_enforcement` AG-only boolean policy setting support.

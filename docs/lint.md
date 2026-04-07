@@ -1044,10 +1044,11 @@ Azure limits the total number of custom rules using the `RegEx` operator to
 **Severity:** WARNING
 
 Azure limits total custom rules to 100 per policy across all rule types.
-This check counts rules in both `azure_waf_custom_rules` and
-`azure_waf_rate_rules` phases.
+This check counts rules in `azure_waf_custom_rules` and
+`azure_waf_rate_rules` phases only — `azure_waf_managed_rules` entries
+are excluded.
 
-**Triggers on:** 101+ total rules across both phases.
+**Triggers on:** 101+ total rules across both custom and rate phases.
 
 ### AZ520 -- Duplicate match conditions across rules
 

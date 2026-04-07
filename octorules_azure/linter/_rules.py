@@ -122,5 +122,8 @@ AZ705 = RuleMeta(
 )
 AZ706 = RuleMeta("AZ706", "managed", "Missing or invalid ruleId in rule override", Severity.ERROR)
 AZ707 = RuleMeta("AZ707", "managed", "Invalid action in rule override", Severity.ERROR)
+AZ708 = RuleMeta(
+    "AZ708", "managed", "FD-only override action used with Application Gateway", Severity.WARNING
+)
 
 AZ_RULE_METAS: list[RuleMeta] = [obj for obj in globals().values() if isinstance(obj, RuleMeta)]

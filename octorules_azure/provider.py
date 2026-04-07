@@ -16,6 +16,7 @@ Authentication uses ``DefaultAzureCredential`` from ``azure-identity``
 
 import logging
 import os
+import threading
 
 from azure.core.exceptions import (
     ClientAuthenticationError,
@@ -51,6 +52,10 @@ _ETAG_JITTER = 0.5
 
 # Transient error retry config for 5xx/429 (separate from ETag conflicts).
 _TRANSIENT_BACKOFF = (1.0, 2.0, 4.0)
+
+# HTTP status codes worth retrying — 429 (throttle) plus genuine server errors.
+# Notably excludes 501 Not Implemented and 505 HTTP Version Not Supported.
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
 def _classify_azure_error(e: Exception) -> type[ProviderAuthError] | None:
@@ -172,6 +177,7 @@ class AzureWafProvider:
             )
 
         self._max_workers = max_workers
+        self._lock = threading.Lock()
         self._zone_plans: dict[str, str] = {}
 
     # -- Properties --
@@ -227,8 +233,9 @@ class AzureWafProvider:
     def _retry_transient(self, fn, *, label: str):
         """Call *fn* with retry on transient Azure errors.
 
-        Auth and not-found errors propagate immediately.  Transient
-        server errors (500, 503) and throttling (429) are retried.
+        Auth and not-found errors propagate immediately.  Only status
+        codes in ``_RETRYABLE_STATUS_CODES`` (429, 500, 502, 503, 504)
+        are retried; other errors (e.g. 501 Not Implemented) propagate.
         """
         # Non-retryable Azure errors (auth, not-found, 4xx client errors).
         # These are wrapped in _NonRetryable so they escape retry_with_backoff
@@ -241,9 +248,9 @@ class AzureWafProvider:
             except _NO_RETRY as e:
                 raise _NonRetryableError(e) from e
             except HttpResponseError as e:
-                if e.status_code and e.status_code < 500 and e.status_code != 429:
+                if e.status_code and e.status_code not in _RETRYABLE_STATUS_CODES:
                     raise _NonRetryableError(e) from e
-                raise  # 5xx and 429 fall through to retry
+                raise  # retryable status codes fall through to retry
 
         try:
             return retry_with_backoff(
@@ -278,7 +285,8 @@ class AzureWafProvider:
             ) from None
         tier = _normalize_sku(policy)
         if tier is not None:
-            self._zone_plans[zone_name] = tier
+            with self._lock:
+                self._zone_plans[zone_name] = tier
         log.debug("Resolved zone %s in resource group %s", zone_name, self._resource_group)
         return zone_name
 

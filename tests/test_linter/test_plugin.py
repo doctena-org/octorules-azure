@@ -324,6 +324,29 @@ class TestTotalRuleCount:
         azure_lint(rules_data, ctx)
         assert "AZ501" not in _ids(ctx)
 
+    def test_managed_rules_excluded_from_count(self):
+        """AZ501 must not count managed rule sets toward the 100-custom-rule limit."""
+        rules_data = {
+            "azure_waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 100)],
+            "azure_waf_managed_rules": [
+                {
+                    "ref": "Microsoft_DefaultRuleSet",
+                    "ruleSetType": "Microsoft_DefaultRuleSet",
+                    "ruleSetVersion": "2.1",
+                    "ruleSetAction": "Block",
+                },
+                {
+                    "ref": "Microsoft_BotManagerRuleSet",
+                    "ruleSetType": "Microsoft_BotManagerRuleSet",
+                    "ruleSetVersion": "1.0",
+                },
+            ],
+        }
+        # 99 custom + 2 managed = 101 entries total, but only 99 custom count
+        ctx = LintContext()
+        azure_lint(rules_data, ctx)
+        assert "AZ501" not in _ids(ctx)
+
 
 class TestCrossPhasePriorities:
     def _make_rule(self, ref, priority, rule_type="MatchRule", **extra):
@@ -453,7 +476,7 @@ class TestRuleMetadataIntegrity:
     def test_rule_count_matches_docs(self):
         from octorules_azure.linter._rules import AZ_RULE_METAS
 
-        assert len(AZ_RULE_METAS) == 70
+        assert len(AZ_RULE_METAS) == 71
 
     def test_all_rule_ids_start_with_az(self):
         from octorules_azure.linter._rules import AZ_RULE_METAS

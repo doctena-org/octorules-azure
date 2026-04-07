@@ -735,6 +735,32 @@ class TestTransientRetry:
         assert result == "p1"
         assert call_count == 2
 
+    def test_501_not_retried(self):
+        """501 Not Implemented should propagate immediately, not retry."""
+        client = MagicMock()
+        p = _make_provider(client=client)
+
+        err = HttpResponseError("not implemented")
+        err.status_code = 501
+        client.policies.get.side_effect = err
+
+        with pytest.raises(ProviderError):
+            p.resolve_zone_id("test")
+        assert client.policies.get.call_count == 1
+
+    def test_505_not_retried(self):
+        """505 HTTP Version Not Supported should propagate immediately."""
+        client = MagicMock()
+        p = _make_provider(client=client)
+
+        err = HttpResponseError("http version not supported")
+        err.status_code = 505
+        client.policies.get.side_effect = err
+
+        with pytest.raises(ProviderError):
+            p.resolve_zone_id("test")
+        assert client.policies.get.call_count == 1
+
 
 # ---------------------------------------------------------------------------
 # ETag retry exhaustion
@@ -882,6 +908,39 @@ class TestConcurrentWorkers:
             results = [f.result() for f in futures]
 
         assert results == [f"p{i}" for i in range(8)]
+
+    def test_concurrent_resolution_populates_all_zone_plans(self):
+        """Concurrent resolve_zone_id calls should populate zone_plans for all zones."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        client = MagicMock()
+        p = _make_provider(client=client, max_workers=4)
+
+        skus = {
+            "policy-a": "Premium_AzureFrontDoor",
+            "policy-b": "Standard_AzureFrontDoor",
+        }
+
+        def mock_get(rg, name):
+            return {
+                "name": name,
+                "sku": {"name": skus[name]},
+                "custom_rules": {"rules": []},
+            }
+
+        client.policies.get.side_effect = mock_get
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {executor.submit(p.resolve_zone_id, name): name for name in skus}
+            results = {}
+            for future in as_completed(futures):
+                name = futures[future]
+                results[name] = future.result()
+
+        assert results == {"policy-a": "policy-a", "policy-b": "policy-b"}
+        assert len(p.zone_plans) == 2
+        assert p.zone_plans["policy-a"] == "premium"
+        assert p.zone_plans["policy-b"] == "standard"
 
     @patch("octorules.retry.time.sleep")
     def test_concurrent_partial_failure(self, _sleep):
