@@ -14,6 +14,8 @@ AZ010 = RuleMeta("AZ010", "structure", "Invalid ref format", Severity.ERROR)
 AZ020 = RuleMeta("AZ020", "structure", "Unknown top-level rule field", Severity.WARNING)
 AZ021 = RuleMeta("AZ021", "structure", "negateCondition must be a boolean", Severity.ERROR)
 AZ022 = RuleMeta("AZ022", "structure", "Duplicate ref within phase", Severity.ERROR)
+AZ023 = RuleMeta("AZ023", "structure", "Rule entry is not a dict", Severity.ERROR)
+AZ024 = RuleMeta("AZ024", "structure", "Phase value is not a list", Severity.ERROR)
 
 # --- AZ1xx: Priority checks ---
 AZ100 = RuleMeta("AZ100", "priority", "Priority must be a positive integer", Severity.ERROR)

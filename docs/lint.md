@@ -1,6 +1,6 @@
 # Lint Rule Reference
 
-`octorules lint` performs offline static analysis of your Azure WAF rules files. **71 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
+`octorules lint` performs offline static analysis of your Azure WAF rules files. **73 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
@@ -49,6 +49,8 @@ azure_waf_custom_rules:
 | AZ020 | WARNING | structure | Unknown top-level rule field |
 | AZ021 | ERROR | structure | `negateCondition` must be boolean |
 | AZ022 | ERROR | structure | Duplicate `ref` within phase |
+| AZ023 | ERROR | structure | Rule entry is not a dict |
+| AZ024 | ERROR | structure | Phase value is not a list |
 | AZ100 | ERROR | priority | Priority must be a positive integer |
 | AZ101 | ERROR | priority | Duplicate priority across rules |
 | AZ102 | INFO | priority | Non-contiguous rule priorities |
@@ -294,6 +296,50 @@ azure_waf_custom_rules:
   - ref: BlockIPs          # <-- duplicate
     priority: 2
     ...
+```
+
+---
+
+### AZ023 -- Rule entry is not a dict
+
+**Severity:** ERROR
+
+Each entry in a rules list must be a YAML mapping (dict). A bare scalar or list
+element (e.g. a string or integer) is always an authoring mistake.
+
+**Triggers on:**
+
+```yaml
+azure_waf_custom_rules:
+  - BlockBadIPs          # <-- string instead of mapping
+```
+
+**Fix:** Replace the scalar with a proper rule mapping.
+
+---
+
+### AZ024 -- Phase value is not a list
+
+**Severity:** ERROR
+
+Each phase key must map to a YAML list (sequence). A scalar, mapping, or
+null value is always an authoring mistake -- rules files expect a list of
+rule entries under each phase.
+
+**Triggers on:**
+
+```yaml
+azure_waf_custom_rules: "not a list"
+```
+
+**Fix:** Use a proper list:
+
+```yaml
+azure_waf_custom_rules:
+  - ref: BlockBadIPs
+    priority: 1
+    action: Block
+    matchConditions: [...]
 ```
 
 ---

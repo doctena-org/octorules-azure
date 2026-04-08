@@ -100,6 +100,29 @@ class TestAzureLint:
         azure_lint(rules_data, ctx)
         assert ctx.results == []
 
+    def test_non_list_phase_produces_az024(self):
+        rules_data = {"azure_waf_custom_rules": "not a list"}
+        ctx = LintContext()
+        azure_lint(rules_data, ctx)
+        rule_ids = _ids(ctx)
+        assert "AZ024" in rule_ids
+        result = next(r for r in ctx.results if r.rule_id == "AZ024")
+        assert result.phase == "azure_waf_custom_rules"
+        assert "not a list" in result.message
+
+    def test_non_list_phase_dict_produces_az024(self):
+        rules_data = {"azure_waf_custom_rules": {"key": "value"}}
+        ctx = LintContext()
+        azure_lint(rules_data, ctx)
+        rule_ids = _ids(ctx)
+        assert "AZ024" in rule_ids
+
+    def test_non_list_phase_skipped_by_filter(self):
+        rules_data = {"azure_waf_custom_rules": "not a list"}
+        ctx = LintContext(phase_filter=["azure_waf_rate_rules"])
+        azure_lint(rules_data, ctx)
+        assert ctx.results == []
+
 
 class TestCrossPhaseChecks:
     def test_duplicate_match_conditions(self):
@@ -476,7 +499,7 @@ class TestRuleMetadataIntegrity:
     def test_rule_count_matches_docs(self):
         from octorules_azure.linter._rules import AZ_RULE_METAS
 
-        assert len(AZ_RULE_METAS) == 71
+        assert len(AZ_RULE_METAS) == 73
 
     def test_all_rule_ids_start_with_az(self):
         from octorules_azure.linter._rules import AZ_RULE_METAS

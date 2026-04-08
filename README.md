@@ -1,6 +1,6 @@
 # octorules-azure
 
-Azure WAF provider for [octorules](https://github.com/doctena-org/octorules) -- manages Azure Web Application Firewall custom rules as YAML.
+Azure WAF provider for [octorules](https://github.com/doctena-org/octorules) — manages Azure Web Application Firewall custom rules as YAML.
 
 Supports both **Azure Front Door WAF** (Premium/Standard) and **Application Gateway WAF** (WAF_v2) through a unified interface. Users write the same YAML regardless of which WAF type is deployed.
 
@@ -14,7 +14,7 @@ Supports both **Azure Front Door WAF** (Premium/Standard) and **Application Gate
 pip install octorules-azure
 ```
 
-This installs octorules (core) and octorules-azure. The provider is auto-discovered -- no `class:` needed in config.
+This installs octorules (core) and octorules-azure. The provider is auto-discovered — no `class:` needed in config.
 
 ## Configuration
 
@@ -41,7 +41,7 @@ zones:
 
 Each zone name maps to an Azure WAF policy name. The provider resolves policy names at runtime. The `env/` prefix resolves values from environment variables at runtime. All keys under the provider section are forwarded to the provider constructor as keyword arguments (octodns-style passthrough).
 
-### Provider Settings
+### Provider settings
 
 All settings below go under the provider section (e.g. `providers.azure`).
 
@@ -55,7 +55,7 @@ All settings below go under the provider section (e.g. `providers.azure`).
 
 ### Authentication
 
-Uses [`DefaultAzureCredential`](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential) -- no token is needed in the config file. Common options:
+Uses [`DefaultAzureCredential`](https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.defaultazurecredential) — no token is needed in the config file. Common options:
 
 - **Service principal** (CI/CD): `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_CLIENT_SECRET` env vars
 - **Managed identity** (Azure VMs, ACI, App Service): assign identity to the resource, grant WAF Contributor role
@@ -72,7 +72,7 @@ Safety thresholds are configured under `safety:` (framework-owned, not forwarded
 | `safety.update_threshold` | `30.0` | Max % of rules that can be updated |
 | `safety.min_existing` | `3` | Min rules before thresholds apply |
 
-## Supported Features
+## Supported features
 
 | Feature | Status | Azure concept |
 |---|---|---|
@@ -91,7 +91,7 @@ Safety thresholds are configured under `safety:` (framework-owned, not forwarded
 | `azure_waf_rate_rules` | `RateLimitRule` | Rate limiting rules with threshold, duration, and grouping |
 | `azure_waf_managed_rules` | Managed | OWASP DRS, Bot Protection rule sets with overrides and exclusions |
 
-## Rule Format
+## Rule format
 
 The same YAML format works for both Front Door and Application Gateway. The adapter translates API-level differences (field naming, SDK models) transparently.
 
@@ -181,7 +181,7 @@ azure_waf_rate_rules:
 | `ruleType` | string | No | `MatchRule` (default) or `RateLimitRule` |
 | `matchConditions` | list | Yes | One or more conditions (ANDed); max 10 per rule |
 | `rateLimitDurationInMinutes` | int | RateLimitRule | `1` or `5` (time window) |
-| `rateLimitThreshold` | int | RateLimitRule | Requests per client in the window (10 -- 1,000,000) |
+| `rateLimitThreshold` | int | RateLimitRule | Requests per client in the window (10 — 1,000,000) |
 | `groupBy` | list | No | Rate limit grouping: `SocketAddr`, `GeoLocation`, or `None` |
 
 ### Match condition fields
@@ -213,13 +213,13 @@ The adapter pattern handles all API differences transparently. Users write ident
 
 ## Linting
 
-71 lint rules with `AZ` prefix covering structure, priority, action, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets. See [`docs/lint.md`](docs/lint.md) for the full reference with examples.
+73 lint rules with `AZ` prefix covering structure, priority, action, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets. See [`docs/lint.md`](docs/lint.md) for the full reference with examples.
 
 ```bash
 octorules lint --config config.yaml
 ```
 
-## Known Limitations
+## Known limitations
 
 - **Front Door propagation delay**: Configuration changes can take up to 45 minutes to propagate to all edge nodes globally. Plan accordingly for production deployments.
 - **No PATCH API**: Azure WAF uses full-policy PUT. octorules always fetches the current policy first and merges changes, but concurrent external modifications during sync could conflict (mitigated by ETag retry).

@@ -1430,6 +1430,7 @@ def validate_rules(rules: list[dict], *, phase: str = "") -> list[LintResult]:
 
     for rule in rules:
         if not isinstance(rule, dict):
+            results.append(_result("AZ023", Severity.ERROR, "Rule entry is not a dict", phase))
             continue
 
         ref = _check_ref(rule, results, phase)

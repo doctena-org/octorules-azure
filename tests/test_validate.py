@@ -688,9 +688,10 @@ class TestParametrizedEnums:
 # ---------------------------------------------------------------------------
 class TestEdgeCases:
     def test_non_dict_in_rules_list(self):
-        """Non-dict entries in rules list should be silently skipped."""
+        """Non-dict entries in rules list produce AZ023."""
         results = validate_rules(["not-a-dict", 42, None])
-        assert results == []
+        az023 = [r for r in results if r.rule_id == "AZ023"]
+        assert len(az023) == 3
 
     def test_non_dict_in_match_conditions(self):
         """Non-dict entries in matchConditions should produce AZ300."""
@@ -1487,3 +1488,30 @@ class TestRedundantCIDRs:
         assert "AZ338" in _ids(results)
         # AZ337 also fires for the host-bits issue
         assert "AZ337" in _ids(results)
+
+
+# ---------------------------------------------------------------------------
+# AZ023: Rule entry is not a dict
+# ---------------------------------------------------------------------------
+class TestRuleEntryNotDict:
+    def test_string_entry(self):
+        """Non-dict rule entry produces AZ023 error."""
+        results = validate_rules(["not a dict"])
+        assert "AZ023" in _ids(results)
+
+    def test_int_entry(self):
+        results = validate_rules([42])
+        assert "AZ023" in _ids(results)
+
+    def test_list_entry(self):
+        results = validate_rules([[1, 2, 3]])
+        assert "AZ023" in _ids(results)
+
+    def test_mixed_valid_and_invalid(self):
+        """Valid dict rules still validated alongside non-dict entries."""
+        rule = make_normalised_rule()
+        results = validate_rules(["bad", rule])
+        assert "AZ023" in _ids(results)
+        # The valid rule should not produce AZ023
+        az023_count = sum(1 for r in results if r.rule_id == "AZ023")
+        assert az023_count == 1

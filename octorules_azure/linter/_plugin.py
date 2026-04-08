@@ -192,6 +192,14 @@ def azure_lint(rules_data: dict[str, Any], ctx: LintContext) -> None:
         if ctx.phase_filter and phase_name not in ctx.phase_filter:
             continue
         if not isinstance(rules, list):
+            ctx.add(
+                LintResult(
+                    rule_id="AZ024",
+                    severity=Severity.ERROR,
+                    message=f"Phase '{phase_name}' value is not a list",
+                    phase=phase_name,
+                )
+            )
             continue
 
         if phase_name == "azure_waf_managed_rules":
