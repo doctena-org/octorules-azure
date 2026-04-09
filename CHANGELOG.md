@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-04-09
+
+### Fixed
+- `azure_waf_managed_exclusions` now rejected during validation when
+  WAF type is `front_door` (managed exclusions are only supported on
+  Application Gateway).  Previously, the config was silently accepted
+  during plan and failed at apply time.
+- README test count updated (626 → 650).
+
+### Changed
+- Extension registration guards now use `threading.Lock` for correctness.
+- Pre-commit hook now runs `yamllint` on workflow files.
+
 ## [0.1.4] - 2026-04-08
 
 ### Added

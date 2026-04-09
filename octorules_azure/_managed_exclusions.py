@@ -12,6 +12,7 @@ validate_extension, and dump_extension.
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
 
 log = logging.getLogger(__name__)
@@ -121,6 +122,15 @@ def _validate_managed_exclusions(desired, zone_name, errors, lines):
     """Validate azure_waf_managed_exclusions offline."""
     exclusions = desired.get("azure_waf_managed_exclusions")
     if exclusions is None:
+        return
+
+    from octorules_azure.validate import _WAF_TYPE
+
+    if _WAF_TYPE.get() == "front_door":
+        errors.append(
+            f"  {zone_name}/azure_waf_managed_exclusions:"
+            " not supported on Front Door WAF (only Application Gateway)"
+        )
         return
 
     if not isinstance(exclusions, list):
@@ -265,14 +275,16 @@ class ManagedExclusionsFormatter:
 # Registration
 # ---------------------------------------------------------------------------
 _registered = False
+_register_lock = threading.Lock()
 
 
 def register_managed_exclusions() -> None:
     """Register all managed exclusions hooks with the core extension system."""
     global _registered
-    if _registered:
-        return
-    _registered = True
+    with _register_lock:
+        if _registered:
+            return
+        _registered = True
 
     from octorules.extensions import (
         register_apply_extension,

@@ -296,6 +296,33 @@ class TestValidateExtension:
         _validate_managed_exclusions(desired, "zone", errors, [])
         assert errors == []
 
+    def test_front_door_rejects_managed_exclusions(self):
+        """Managed exclusions are AG-only; FD config should be rejected."""
+        from octorules_azure.validate import set_waf_type
+
+        set_waf_type("front_door")
+        try:
+            desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+            errors: list[str] = []
+            _validate_managed_exclusions(desired, "zone", errors, [])
+            assert len(errors) == 1
+            assert "not supported on Front Door" in errors[0]
+        finally:
+            set_waf_type("")
+
+    def test_app_gateway_allows_managed_exclusions(self):
+        """AG should pass validation for managed exclusions."""
+        from octorules_azure.validate import set_waf_type
+
+        set_waf_type("app_gateway")
+        try:
+            desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+            errors: list[str] = []
+            _validate_managed_exclusions(desired, "zone", errors, [])
+            assert errors == []
+        finally:
+            set_waf_type("")
+
 
 # ---------------------------------------------------------------------------
 # Dump extension

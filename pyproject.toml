@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "octorules-azure"
-version = "0.1.4"
+version = "0.1.5"
 description = "Azure WAF provider for octorules"
 license = "Apache-2.0"
 requires-python = ">=3.10"
