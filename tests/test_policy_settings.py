@@ -768,36 +768,6 @@ class TestFormatReport:
 
 
 # ---------------------------------------------------------------------------
-# Format extension — format_plan and count_changes
-# ---------------------------------------------------------------------------
-class TestFormatPlanAndCount:
-    def test_format_plan(self):
-        fmt = PolicySettingsFormatter()
-        plan = PolicySettingsPlan(changes=[PolicySettingsChange("mode", "Detection", "Prevention")])
-        lines = fmt.format_plan([plan], "my-policy")
-        assert len(lines) == 1
-        assert "my-policy" in lines[0]
-        assert "Detection" in lines[0]
-        assert "Prevention" in lines[0]
-
-    def test_count_changes(self):
-        fmt = PolicySettingsFormatter()
-        plan = PolicySettingsPlan(
-            changes=[
-                PolicySettingsChange("mode", "Detection", "Prevention"),
-                PolicySettingsChange("enabled_state", "Enabled", "Enabled"),  # no change
-                PolicySettingsChange("request_body_check", True, False),
-            ]
-        )
-        assert fmt.count_changes([plan]) == 2
-
-    def test_empty(self):
-        fmt = PolicySettingsFormatter()
-        assert fmt.format_plan([], "z") == []
-        assert fmt.count_changes([]) == 0
-
-
-# ---------------------------------------------------------------------------
 # Provider methods
 # ---------------------------------------------------------------------------
 class TestProviderGetPolicySettings:

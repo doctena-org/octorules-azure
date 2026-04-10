@@ -472,29 +472,6 @@ class TestFormatReport:
 
 
 # ---------------------------------------------------------------------------
-# Format extension -- format_plan and count_changes
-# ---------------------------------------------------------------------------
-class TestFormatPlanAndCount:
-    def test_format_plan(self):
-        fmt = ManagedExclusionsFormatter()
-        plan = ManagedExclusionsPlan(current=[], desired=_SAMPLE_EXCLUSIONS)
-        lines = fmt.format_plan([plan], "my-policy")
-        assert len(lines) == 1
-        assert "my-policy" in lines[0]
-        assert "0 -> 2" in lines[0]
-
-    def test_count_changes(self):
-        fmt = ManagedExclusionsFormatter()
-        plan = ManagedExclusionsPlan(current=[], desired=_SAMPLE_EXCLUSIONS)
-        assert fmt.count_changes([plan]) == 1
-
-    def test_empty(self):
-        fmt = ManagedExclusionsFormatter()
-        assert fmt.format_plan([], "z") == []
-        assert fmt.count_changes([]) == 0
-
-
-# ---------------------------------------------------------------------------
 # Provider methods
 # ---------------------------------------------------------------------------
 class TestProviderGetManagedExclusions:

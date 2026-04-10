@@ -170,24 +170,6 @@ def _dump_managed_exclusions(scope, provider, out_dir):
 class ManagedExclusionsFormatter:
     """Formats global managed exclusion diffs for plan output."""
 
-    def format_plan(self, plans: list, zone_name: str) -> list[str]:
-        lines: list[str] = []
-        for plan in plans:
-            if not isinstance(plan, ManagedExclusionsPlan) or not plan.has_changes:
-                continue
-            lines.append(
-                f"  {zone_name}/managed_exclusions:"
-                f" {len(plan.current)} -> {len(plan.desired)} exclusions"
-            )
-        return lines
-
-    def count_changes(self, plans: list) -> int:
-        count = 0
-        for plan in plans:
-            if isinstance(plan, ManagedExclusionsPlan) and plan.has_changes:
-                count += 1
-        return count
-
     def format_text(self, plans: list, use_color: bool) -> list[str]:
         from octorules._color import Pen
 
@@ -284,18 +266,18 @@ def register_managed_exclusions() -> None:
     with _register_lock:
         if _registered:
             return
+
+        from octorules.extensions import (
+            register_apply_extension,
+            register_dump_extension,
+            register_format_extension,
+            register_plan_zone_hook,
+            register_validate_extension,
+        )
+
+        register_plan_zone_hook(_prefetch_managed_exclusions, _finalize_managed_exclusions)
+        register_apply_extension("azure_waf_managed_exclusions", _apply_managed_exclusions)
+        register_format_extension("azure_waf_managed_exclusions", ManagedExclusionsFormatter())
+        register_validate_extension(_validate_managed_exclusions)
+        register_dump_extension(_dump_managed_exclusions)
         _registered = True
-
-    from octorules.extensions import (
-        register_apply_extension,
-        register_dump_extension,
-        register_format_extension,
-        register_plan_zone_hook,
-        register_validate_extension,
-    )
-
-    register_plan_zone_hook(_prefetch_managed_exclusions, _finalize_managed_exclusions)
-    register_apply_extension("azure_waf_managed_exclusions", _apply_managed_exclusions)
-    register_format_extension("azure_waf_managed_exclusions", ManagedExclusionsFormatter())
-    register_validate_extension(_validate_managed_exclusions)
-    register_dump_extension(_dump_managed_exclusions)
