@@ -4,7 +4,7 @@ Azure WAF provider for [octorules](https://github.com/doctena-org/octorules) —
 
 Supports both **Azure Front Door WAF** (Premium/Standard) and **Application Gateway WAF** (WAF_v2) through a unified interface. Users write the same YAML regardless of which WAF type is deployed.
 
-> **Alpha** — this provider has comprehensive offline test coverage (650 tests)
+> **Alpha** — this provider has comprehensive offline test coverage (646 tests)
 > but has not yet been tested against live Azure WAF APIs. Use with caution and
 > report any issues.
 
@@ -245,4 +245,4 @@ ln -sf ../../scripts/hooks/pre-commit .git/hooks/pre-commit
 
 ## License
 
-Apache-2.0
+octorules-azure is licensed under the [Apache License 2.0](LICENSE).

@@ -57,7 +57,7 @@ azure_waf_custom_rules:
 | AZ103 | WARNING | priority | Priority out of valid range for this WAF type (Front Door) |
 | AZ200 | ERROR | action | Invalid action type |
 | AZ201 | ERROR | action | Action not supported on this WAF type |
-| AZ300 | ERROR | match | `matchConditions` must be non-empty list of dicts |
+| AZ300 | ERROR | match | `matchConditions` must be a non-empty list |
 | AZ301 | ERROR | match | `matchConditions` exceeds 10 per rule |
 | AZ310 | ERROR | match | Invalid `matchVariable` |
 | AZ311 | ERROR | match | Invalid `operator` |
