@@ -268,7 +268,7 @@ class TestConditionDetails:
         assert "AZ318" in _ids(results)
 
     def test_valid_cidr(self):
-        rule = make_normalised_rule(match_value=["203.0.113.0/24", "198.51.100.1"])
+        rule = make_normalised_rule(match_value=["104.16.0.0/12", "1.1.1.1"])
         assert validate_rules([rule]) == []
 
     def test_cidr_host_bits_set(self):
@@ -824,11 +824,39 @@ class TestPrivateIPRanges:
         results = validate_rules([rule])
         assert "AZ319" in _ids(results)
 
-    @pytest.mark.parametrize("cidr", ["8.8.8.8", "1.1.1.0/24", "203.0.113.0/24", "2001:db8::1"])
+    @pytest.mark.parametrize("cidr", ["8.8.8.8", "1.1.1.0/24", "104.16.0.0/12"])
     def test_public_ranges_not_flagged(self, cidr):
         rule = make_normalised_rule(match_value=[cidr])
         results = validate_rules([rule])
         assert "AZ319" not in _ids(results)
+
+    def test_documentation_rfc5737_flagged(self):
+        """RFC 5737 documentation address (192.0.2.1) should now be flagged."""
+        rule = make_normalised_rule(match_value=["192.0.2.1"])
+        results = validate_rules([rule])
+        assert "AZ319" in _ids(results)
+        az319 = [r for r in results if r.rule_id == "AZ319"]
+        assert "documentation" in az319[0].message
+
+    def test_documentation_rfc3849_ipv6_flagged(self):
+        """IPv6 documentation prefix (2001:db8::1) should now be flagged."""
+        rule = make_normalised_rule(match_value=["2001:db8::1"])
+        results = validate_rules([rule])
+        assert "AZ319" in _ids(results)
+        az319 = [r for r in results if r.rule_id == "AZ319"]
+        assert "documentation" in az319[0].message
+
+    def test_benchmark_testing_flagged(self):
+        """RFC 2544 benchmark testing range should be flagged."""
+        rule = make_normalised_rule(match_value=["198.18.0.1"])
+        results = validate_rules([rule])
+        assert "AZ319" in _ids(results)
+
+    def test_multicast_flagged(self):
+        """Multicast range (224.0.0.0/4) should be flagged."""
+        rule = make_normalised_rule(match_value=["224.0.0.1"])
+        results = validate_rules([rule])
+        assert "AZ319" in _ids(results)
 
 
 # ---------------------------------------------------------------------------
@@ -873,7 +901,7 @@ class TestCatchAllCIDR:
         assert "AZ322" in _ids(results)
 
     def test_normal_cidr_ok(self):
-        rule = make_normalised_rule(match_value=["203.0.113.0/24"])
+        rule = make_normalised_rule(match_value=["104.16.0.0/12"])
         results = validate_rules([rule])
         assert "AZ322" not in _ids(results)
 
@@ -1057,7 +1085,7 @@ class TestAnyWithMatchValue:
         assert "AZ325" not in _ids(results)
 
     def test_non_any_with_values_ok(self):
-        rule = make_normalised_rule(operator="IPMatch", match_value=["203.0.113.0/24"])
+        rule = make_normalised_rule(operator="IPMatch", match_value=["104.16.0.0/12"])
         results = validate_rules([rule])
         assert "AZ325" not in _ids(results)
 
@@ -1099,7 +1127,7 @@ class TestDuplicateVariableOperator:
                 "selector": None,
                 "operator": "IPMatch",
                 "negateCondition": False,
-                "matchValue": ["203.0.113.0/24"],
+                "matchValue": ["104.16.0.0/12"],
                 "transforms": [],
             },
             {
@@ -1107,7 +1135,7 @@ class TestDuplicateVariableOperator:
                 "selector": None,
                 "operator": "IPMatch",
                 "negateCondition": False,
-                "matchValue": ["198.51.100.0/24"],
+                "matchValue": ["1.1.1.0/24"],
                 "transforms": [],
             },
         ]
@@ -1122,7 +1150,7 @@ class TestDuplicateVariableOperator:
                 "selector": None,
                 "operator": "IPMatch",
                 "negateCondition": False,
-                "matchValue": ["203.0.113.0/24"],
+                "matchValue": ["104.16.0.0/12"],
                 "transforms": [],
             },
             {
@@ -1227,7 +1255,7 @@ class TestCatchAllIPMatch:
 
     def test_normal_ip_range_not_catch_all(self):
         rule = make_normalised_rule(
-            ref="NormalIP", priority=1, action="Block", match_value=["203.0.113.0/24"]
+            ref="NormalIP", priority=1, action="Block", match_value=["104.16.0.0/12"]
         )
         results = validate_rules([rule])
         assert "AZ340" not in _ids(results)

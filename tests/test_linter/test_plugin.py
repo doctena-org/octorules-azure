@@ -23,7 +23,7 @@ class TestAzureLint:
                             "selector": None,
                             "operator": "IPMatch",
                             "negateCondition": False,
-                            "matchValue": ["203.0.113.0/24"],
+                            "matchValue": ["104.16.0.0/12"],
                             "transforms": [],
                         }
                     ],
@@ -59,7 +59,7 @@ class TestAzureLint:
                             "selector": None,
                             "operator": "IPMatch",
                             "negateCondition": False,
-                            "matchValue": ["203.0.113.0/24"],
+                            "matchValue": ["104.16.0.0/12"],
                             "transforms": [],
                         }
                     ],
@@ -89,7 +89,7 @@ class TestAzureLint:
                             "selector": None,
                             "operator": "IPMatch",
                             "negateCondition": False,
-                            "matchValue": ["203.0.113.0/24"],
+                            "matchValue": ["104.16.0.0/12"],
                             "transforms": [],
                         }
                     ],
@@ -132,7 +132,7 @@ class TestCrossPhaseChecks:
                 "selector": None,
                 "operator": "IPMatch",
                 "negateCondition": False,
-                "matchValue": ["203.0.113.0/24"],
+                "matchValue": ["104.16.0.0/12"],
                 "transforms": [],
             }
         ]
@@ -167,7 +167,7 @@ class TestCrossPhaseChecks:
             "selector": None,
             "operator": "IPMatch",
             "negateCondition": False,
-            "matchValue": ["203.0.113.0/24"],
+            "matchValue": ["104.16.0.0/12"],
             "transforms": [],
         }
         cond_qs = {
@@ -212,7 +212,7 @@ class TestCrossPhaseChecks:
             "selector": None,
             "operator": "IPMatch",
             "negateCondition": False,
-            "matchValue": ["203.0.113.0/24"],
+            "matchValue": ["104.16.0.0/12"],
             "transforms": [],
         }
         cond_qs = {
@@ -270,7 +270,7 @@ class TestCrossPhaseChecks:
                             "selector": None,
                             "operator": "IPMatch",
                             "negateCondition": False,
-                            "matchValue": ["203.0.113.0/24"],
+                            "matchValue": ["104.16.0.0/12"],
                             "transforms": [],
                         }
                     ],
@@ -313,7 +313,7 @@ class TestTotalRuleCount:
                     "selector": None,
                     "operator": "IPMatch",
                     "negateCondition": False,
-                    "matchValue": ["203.0.113.0/24"],
+                    "matchValue": ["104.16.0.0/12"],
                     "transforms": [],
                 }
             ],
@@ -385,7 +385,7 @@ class TestCrossPhasePriorities:
                     "selector": None,
                     "operator": "IPMatch",
                     "negateCondition": False,
-                    "matchValue": ["203.0.113.0/24"],
+                    "matchValue": ["104.16.0.0/12"],
                     "transforms": [],
                 }
             ],

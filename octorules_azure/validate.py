@@ -10,6 +10,81 @@ from contextvars import ContextVar
 
 from octorules.linter.engine import LintResult, Severity
 
+# Rule IDs emitted by validate_rules() / validate_managed_rules() — kept in
+# sync with _rules.py by test_plugin_rule_ids_match_meta.
+RULE_IDS: frozenset[str] = frozenset(
+    {
+        "AZ001",
+        "AZ002",
+        "AZ003",
+        "AZ004",
+        "AZ005",
+        "AZ006",
+        "AZ010",
+        "AZ020",
+        "AZ021",
+        "AZ022",
+        "AZ023",
+        "AZ100",
+        "AZ101",
+        "AZ102",
+        "AZ103",
+        "AZ200",
+        "AZ201",
+        "AZ300",
+        "AZ301",
+        "AZ310",
+        "AZ311",
+        "AZ312",
+        "AZ313",
+        "AZ314",
+        "AZ315",
+        "AZ316",
+        "AZ317",
+        "AZ318",
+        "AZ319",
+        "AZ320",
+        "AZ321",
+        "AZ322",
+        "AZ323",
+        "AZ324",
+        "AZ325",
+        "AZ326",
+        "AZ327",
+        "AZ328",
+        "AZ330",
+        "AZ331",
+        "AZ332",
+        "AZ333",
+        "AZ334",
+        "AZ335",
+        "AZ336",
+        "AZ337",
+        "AZ338",
+        "AZ340",
+        "AZ341",
+        "AZ400",
+        "AZ401",
+        "AZ402",
+        "AZ403",
+        "AZ410",
+        "AZ411",
+        "AZ600",
+        "AZ601",
+        "AZ602",
+        "AZ603",
+        "AZ700",
+        "AZ701",
+        "AZ702",
+        "AZ703",
+        "AZ704",
+        "AZ705",
+        "AZ706",
+        "AZ707",
+        "AZ708",
+    }
+)
+
 
 def _result(
     rule_id: str,
@@ -152,17 +227,38 @@ _NO_TRANSFORM_OPERATORS = frozenset({"IPMatch", "GeoMatch", "Any", "ServiceTagMa
 # Catch-all CIDR ranges (match everything).
 _CATCH_ALL_CIDRS = frozenset({"0.0.0.0/0", "::/0"})
 
-# RFC 1918 + RFC 6598 + link-local + loopback.
-_PRIVATE_NETWORKS = [
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("100.64.0.0/10"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fc00::/7"),
-    ipaddress.ip_network("fe80::/10"),
+# Reserved/bogon networks (RFC 1918, loopback, link-local, etc.)
+_PRIVATE_NETWORKS: list[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, str]] = [
+    # IPv4
+    (ipaddress.ip_network("10.0.0.0/8"), "RFC 1918 private"),
+    (ipaddress.ip_network("172.16.0.0/12"), "RFC 1918 private"),
+    (ipaddress.ip_network("192.168.0.0/16"), "RFC 1918 private"),
+    (ipaddress.ip_network("127.0.0.0/8"), "loopback"),
+    (ipaddress.ip_network("169.254.0.0/16"), "link-local"),
+    (ipaddress.ip_network("100.64.0.0/10"), "CGNAT (RFC 6598)"),
+    (ipaddress.ip_network("0.0.0.0/8"), "this network"),
+    (ipaddress.ip_network("192.0.2.0/24"), "documentation (RFC 5737)"),
+    (ipaddress.ip_network("198.51.100.0/24"), "documentation (RFC 5737)"),
+    (ipaddress.ip_network("203.0.113.0/24"), "documentation (RFC 5737)"),
+    (ipaddress.ip_network("192.0.0.0/24"), "IANA special purpose"),
+    (ipaddress.ip_network("192.88.99.0/24"), "6to4 relay anycast"),
+    (ipaddress.ip_network("198.18.0.0/15"), "benchmark testing (RFC 2544)"),
+    (ipaddress.ip_network("224.0.0.0/4"), "multicast"),
+    (ipaddress.ip_network("240.0.0.0/4"), "reserved for future use"),
+    # IPv6
+    (ipaddress.ip_network("::/128"), "unspecified"),
+    (ipaddress.ip_network("::1/128"), "loopback"),
+    (ipaddress.ip_network("::ffff:0:0/96"), "IPv4-mapped"),
+    (ipaddress.ip_network("64:ff9b::/96"), "NAT64 (RFC 6052)"),
+    (ipaddress.ip_network("100::/64"), "discard (RFC 6666)"),
+    (ipaddress.ip_network("2001:db8::/32"), "documentation (RFC 3849)"),
+    (ipaddress.ip_network("2001::/23"), "IANA special purpose"),
+    (ipaddress.ip_network("2001::/32"), "Teredo"),
+    (ipaddress.ip_network("2002::/16"), "6to4"),
+    (ipaddress.ip_network("fc00::/7"), "unique local"),
+    (ipaddress.ip_network("fe80::/10"), "link-local"),
+    (ipaddress.ip_network("ff00::/8"), "multicast"),
+    (ipaddress.ip_network("::ffff:0:0:0/96"), "IPv4-translated"),
 ]
 
 # Transform pairs that conflict or are redundant when applied together.
@@ -292,10 +388,11 @@ def _check_action(rule: dict, results: list[LintResult], phase: str, ref: str) -
             _result(
                 "AZ200",
                 Severity.ERROR,
-                f"Invalid action {action!r}; expected one of: {', '.join(sorted(_VALID_ACTIONS))}",
+                f"Invalid action {action!r}",
                 phase,
                 ref=ref,
                 field="action",
+                suggestion=f"Valid: {sorted(_VALID_ACTIONS)}",
             )
         )
         return
@@ -894,7 +991,7 @@ def _check_cidr_private(
             network = ipaddress.ip_network(val + suffix, strict=False)
     except ValueError:
         return  # AZ318 handles invalid CIDRs
-    for private in _PRIVATE_NETWORKS:
+    for private, desc in _PRIVATE_NETWORKS:
         if network.version == private.version and (
             network.subnet_of(private) or private.subnet_of(network)
         ):
@@ -902,7 +999,7 @@ def _check_cidr_private(
                 _result(
                     "AZ319",
                     Severity.INFO,
-                    f"{prefix}: {val} overlaps with private/reserved IP range {private}"
+                    f"{prefix}: {val} overlaps with {desc} range {private}"
                     " (typically not seen in public WAF traffic)",
                     phase,
                     ref=ref,
@@ -1062,10 +1159,11 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
             _result(
                 "AZ400",
                 Severity.ERROR,
-                f"rateLimitDurationInMinutes must be 1 or 5, got {duration!r}",
+                f"Invalid rateLimitDurationInMinutes: {duration!r}",
                 phase,
                 ref=ref,
                 field="rateLimitDurationInMinutes",
+                suggestion=f"Valid: {sorted(_VALID_RATE_DURATIONS)}",
             )
         )
 
@@ -1148,9 +1246,10 @@ def _check_enabled_state(rule: dict, results: list[LintResult], phase: str, ref:
             _result(
                 "AZ005",
                 Severity.ERROR,
-                f"Invalid enabledState {enabled_state!r}; expected 'Enabled' or 'Disabled'",
+                f"Invalid enabledState {enabled_state!r}",
                 phase,
                 ref=ref,
+                suggestion="Valid: ['Disabled', 'Enabled']",
                 field="enabledState",
             )
         )
@@ -1177,8 +1276,9 @@ def _check_rule_type(rule: dict, results: list[LintResult], phase: str, ref: str
             _result(
                 "AZ006",
                 Severity.ERROR,
-                f"Invalid ruleType {rule_type!r}; expected 'MatchRule' or 'RateLimitRule'",
+                f"Invalid ruleType {rule_type!r}",
                 phase,
+                suggestion=f"Valid: {sorted(_VALID_RULE_TYPES)}",
                 ref=ref,
                 field="ruleType",
             )
@@ -1596,10 +1696,10 @@ def _check_rule_set_action(rule: dict, results: list[LintResult], phase: str, re
             _result(
                 "AZ702",
                 Severity.ERROR,
-                f"Invalid ruleSetAction {action!r}; expected one of: "
-                f"{', '.join(sorted(_VALID_RULE_SET_ACTIONS))}",
+                f"Invalid ruleSetAction {action!r}",
                 phase,
                 ref=ref,
+                suggestion=f"Valid: {sorted(_VALID_RULE_SET_ACTIONS)}",
                 field="ruleSetAction",
             )
         )
@@ -1617,8 +1717,9 @@ def _check_managed_enabled_state(
             _result(
                 "AZ703",
                 Severity.ERROR,
-                f"{path}: invalid enabledState {state!r}; expected 'Enabled' or 'Disabled'",
+                f"{path}: invalid enabledState {state!r}",
                 phase,
+                suggestion="Valid: ['Disabled', 'Enabled']",
                 ref=ref,
                 field=f"{path}.enabledState",
             )
@@ -1669,9 +1770,9 @@ def _check_managed_rule_override(
                 _result(
                     "AZ707",
                     Severity.ERROR,
-                    f"{path}: invalid action {action!r}; expected one of: "
-                    f"{', '.join(sorted(_VALID_OVERRIDE_ACTIONS))}",
+                    f"{path}: invalid action {action!r}",
                     phase,
+                    suggestion=f"Valid: {sorted(_VALID_OVERRIDE_ACTIONS)}",
                     ref=ref,
                     field=f"{path}.action",
                 )

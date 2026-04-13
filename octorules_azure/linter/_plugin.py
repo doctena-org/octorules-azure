@@ -7,10 +7,21 @@ from octorules.linter.engine import LintContext, LintResult, Severity
 from octorules.phases import PHASE_BY_NAME
 
 from octorules_azure import AZURE_PHASE_NAMES
-from octorules_azure.linter._rules import AZ_RULE_METAS
+from octorules_azure.validate import RULE_IDS as _validate_ids
 from octorules_azure.validate import validate_managed_rules, validate_rules
 
-AZ_RULE_IDS: frozenset[str] = frozenset(r.rule_id for r in AZ_RULE_METAS)
+# Rule IDs emitted by cross-phase checks in this module.
+_PLUGIN_RULE_IDS: frozenset[str] = frozenset(
+    {
+        "AZ024",
+        "AZ500",
+        "AZ501",
+        "AZ520",
+        "AZ521",
+    }
+)
+
+AZ_RULE_IDS: frozenset[str] = _validate_ids | _PLUGIN_RULE_IDS
 
 
 def _check_duplicate_match_conditions(rules_data: dict[str, Any], ctx: LintContext) -> None:

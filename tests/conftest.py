@@ -163,7 +163,7 @@ def make_normalised_rule(
                 "selector": None,
                 "operator": operator,
                 "negateCondition": False,
-                "matchValue": match_value if match_value is not None else ["203.0.113.0/24"],
+                "matchValue": match_value if match_value is not None else ["104.16.0.0/12"],
                 "transforms": [],
             }
         ],
