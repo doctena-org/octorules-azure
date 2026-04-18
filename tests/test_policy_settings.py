@@ -17,6 +17,7 @@ from octorules_azure._policy_settings import (
     diff_policy_settings,
     normalize_policy_settings,
 )
+from octorules_azure.provider import AzureWafProvider
 
 
 def _scope(zone_id: str = "test-policy") -> Scope:
@@ -360,7 +361,7 @@ class TestPrefetchHook:
         assert result is None
 
     def test_fetches_settings(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.return_value = {
             "enabled_state": "Enabled",
             "mode": "Prevention",
@@ -375,7 +376,7 @@ class TestPrefetchHook:
     def test_api_failure_handled_gracefully(self):
         from octorules.provider.exceptions import ProviderError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderError("API down")
         all_desired = {"azure_waf_policy_settings": {"mode": "Detection"}}
         result = _prefetch_policy_settings(all_desired, _scope(), provider)
@@ -386,7 +387,7 @@ class TestPrefetchHook:
         import pytest
         from octorules.provider.exceptions import ProviderAuthError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderAuthError("forbidden")
         all_desired = {"azure_waf_policy_settings": {"mode": "Detection"}}
         with pytest.raises(ProviderAuthError):
@@ -433,7 +434,7 @@ class TestFinalizeHook:
 # ---------------------------------------------------------------------------
 class TestApplyHook:
     def test_apply_changes(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         zp = MagicMock()
         plan = PolicySettingsPlan(
             changes=[
@@ -451,7 +452,7 @@ class TestApplyHook:
         assert payload["enabled_state"] == "Disabled"
 
     def test_no_changes_skipped(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         zp = MagicMock()
         plan = PolicySettingsPlan(
             changes=[PolicySettingsChange("mode", "Prevention", "Prevention")]
@@ -534,7 +535,7 @@ class TestValidateExtension:
 # ---------------------------------------------------------------------------
 class TestDumpExtension:
     def test_dump_returns_settings(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.return_value = {
             "enabled_state": "Enabled",
             "mode": "Prevention",
@@ -546,13 +547,13 @@ class TestDumpExtension:
     def test_dump_api_failure(self):
         from octorules.provider.exceptions import ProviderError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderError("down")
         result = _dump_policy_settings(_scope(), provider, None)
         assert result is None
 
     def test_dump_empty_settings(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.return_value = {}
         result = _dump_policy_settings(_scope(), provider, None)
         assert result is None
@@ -561,7 +562,7 @@ class TestDumpExtension:
         import pytest
         from octorules.provider.exceptions import ProviderAuthError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderAuthError("forbidden")
         with pytest.raises(ProviderAuthError):
             _dump_policy_settings(_scope(), provider, None)

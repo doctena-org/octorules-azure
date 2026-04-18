@@ -16,6 +16,7 @@ from octorules_azure._managed_exclusions import (
     diff_managed_exclusions,
     normalize_managed_exclusions,
 )
+from octorules_azure.provider import AzureWafProvider
 
 
 def _scope(zone_id: str = "test-policy") -> Scope:
@@ -172,7 +173,7 @@ class TestPrefetchHook:
         assert result is None
 
     def test_fetches_exclusions(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = _SAMPLE_EXCLUSIONS
         all_desired = {"azure_waf_managed_exclusions": [_SAMPLE_EXCLUSIONS[0]]}
         result = _prefetch_managed_exclusions(all_desired, _scope(), provider)
@@ -184,7 +185,7 @@ class TestPrefetchHook:
     def test_api_failure_handled_gracefully(self):
         from octorules.provider.exceptions import ProviderError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderError("API down")
         all_desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
         result = _prefetch_managed_exclusions(all_desired, _scope(), provider)
@@ -195,7 +196,7 @@ class TestPrefetchHook:
         import pytest
         from octorules.provider.exceptions import ProviderAuthError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderAuthError("forbidden")
         all_desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
         with pytest.raises(ProviderAuthError):
@@ -236,7 +237,7 @@ class TestFinalizeHook:
 # ---------------------------------------------------------------------------
 class TestApplyHook:
     def test_apply_changes(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         zp = MagicMock()
         plan = ManagedExclusionsPlan(current=[], desired=_SAMPLE_EXCLUSIONS)
         synced, error = _apply_managed_exclusions(zp, [plan], _scope(), provider)
@@ -247,7 +248,7 @@ class TestApplyHook:
         assert call_args[0][1] == _SAMPLE_EXCLUSIONS
 
     def test_no_changes_skipped(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         zp = MagicMock()
         plan = ManagedExclusionsPlan(current=_SAMPLE_EXCLUSIONS, desired=_SAMPLE_EXCLUSIONS)
         synced, error = _apply_managed_exclusions(zp, [plan], _scope(), provider)
@@ -329,7 +330,7 @@ class TestValidateExtension:
 # ---------------------------------------------------------------------------
 class TestDumpExtension:
     def test_dump_returns_exclusions(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = _SAMPLE_EXCLUSIONS
         result = _dump_managed_exclusions(_scope(), provider, None)
         assert "azure_waf_managed_exclusions" in result
@@ -338,13 +339,13 @@ class TestDumpExtension:
     def test_dump_api_failure(self):
         from octorules.provider.exceptions import ProviderError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderError("down")
         result = _dump_managed_exclusions(_scope(), provider, None)
         assert result is None
 
     def test_dump_empty_exclusions(self):
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = []
         result = _dump_managed_exclusions(_scope(), provider, None)
         assert result is None
@@ -353,7 +354,7 @@ class TestDumpExtension:
         import pytest
         from octorules.provider.exceptions import ProviderAuthError
 
-        provider = MagicMock()
+        provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderAuthError("forbidden")
         with pytest.raises(ProviderAuthError):
             _dump_managed_exclusions(_scope(), provider, None)
