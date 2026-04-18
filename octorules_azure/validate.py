@@ -9,6 +9,7 @@ import re
 from contextvars import ContextVar
 
 from octorules.linter.engine import LintResult, Severity
+from octorules.reserved_ips import is_reserved
 
 # Rule IDs emitted by validate_rules() / validate_managed_rules() — kept in
 # sync with _rules.py by test_plugin_rule_ids_match_meta.
@@ -227,39 +228,8 @@ _NO_TRANSFORM_OPERATORS = frozenset({"IPMatch", "GeoMatch", "Any", "ServiceTagMa
 # Catch-all CIDR ranges (match everything).
 _CATCH_ALL_CIDRS = frozenset({"0.0.0.0/0", "::/0"})
 
-# Reserved/bogon networks (RFC 1918, loopback, link-local, etc.)
-_PRIVATE_NETWORKS: list[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, str]] = [
-    # IPv4
-    (ipaddress.ip_network("10.0.0.0/8"), "RFC 1918 private"),
-    (ipaddress.ip_network("172.16.0.0/12"), "RFC 1918 private"),
-    (ipaddress.ip_network("192.168.0.0/16"), "RFC 1918 private"),
-    (ipaddress.ip_network("127.0.0.0/8"), "loopback"),
-    (ipaddress.ip_network("169.254.0.0/16"), "link-local"),
-    (ipaddress.ip_network("100.64.0.0/10"), "CGNAT (RFC 6598)"),
-    (ipaddress.ip_network("0.0.0.0/8"), "this network"),
-    (ipaddress.ip_network("192.0.2.0/24"), "documentation (RFC 5737)"),
-    (ipaddress.ip_network("198.51.100.0/24"), "documentation (RFC 5737)"),
-    (ipaddress.ip_network("203.0.113.0/24"), "documentation (RFC 5737)"),
-    (ipaddress.ip_network("192.0.0.0/24"), "IANA special purpose"),
-    (ipaddress.ip_network("192.88.99.0/24"), "6to4 relay anycast"),
-    (ipaddress.ip_network("198.18.0.0/15"), "benchmark testing (RFC 2544)"),
-    (ipaddress.ip_network("224.0.0.0/4"), "multicast"),
-    (ipaddress.ip_network("240.0.0.0/4"), "reserved for future use"),
-    # IPv6
-    (ipaddress.ip_network("::/128"), "unspecified"),
-    (ipaddress.ip_network("::1/128"), "loopback"),
-    (ipaddress.ip_network("::ffff:0:0/96"), "IPv4-mapped"),
-    (ipaddress.ip_network("64:ff9b::/96"), "NAT64 (RFC 6052)"),
-    (ipaddress.ip_network("100::/64"), "discard (RFC 6666)"),
-    (ipaddress.ip_network("2001:db8::/32"), "documentation (RFC 3849)"),
-    (ipaddress.ip_network("2001::/23"), "IANA special purpose"),
-    (ipaddress.ip_network("2001::/32"), "Teredo"),
-    (ipaddress.ip_network("2002::/16"), "6to4"),
-    (ipaddress.ip_network("fc00::/7"), "unique local"),
-    (ipaddress.ip_network("fe80::/10"), "link-local"),
-    (ipaddress.ip_network("ff00::/8"), "multicast"),
-    (ipaddress.ip_network("::ffff:0:0:0/96"), "IPv4-translated"),
-]
+# Reserved/bogon network detection is provided by octorules.reserved_ips
+# (single source of truth across providers; see core v0.26.0).
 
 # Transform pairs that conflict or are redundant when applied together.
 _CONFLICTING_TRANSFORMS = frozenset(
@@ -982,31 +952,26 @@ def _check_cidr_catch_all(
 def _check_cidr_private(
     val: str, results: list[LintResult], phase: str, ref: str, prefix: str
 ) -> None:
-    """AZ319: Info when private/reserved IP range is used in IPMatch."""
-    try:
-        if "/" in val:
-            network = ipaddress.ip_network(val, strict=False)
-        else:
-            suffix = "/32" if ":" not in val else "/128"
-            network = ipaddress.ip_network(val + suffix, strict=False)
-    except ValueError:
-        return  # AZ318 handles invalid CIDRs
-    for private, desc in _PRIVATE_NETWORKS:
-        if network.version == private.version and (
-            network.subnet_of(private) or private.subnet_of(network)
-        ):
-            results.append(
-                _result(
-                    "AZ319",
-                    Severity.INFO,
-                    f"{prefix}: {val} overlaps with {desc} range {private}"
-                    " (typically not seen in public WAF traffic)",
-                    phase,
-                    ref=ref,
-                    field=f"{prefix}.matchValue",
-                )
-            )
-            return
+    """AZ319: Info when a private/reserved IP range is used in IPMatch.
+
+    Uses strict containment (``val`` is a subset of a reserved range) —
+    aligned with the other four providers in v0.1.8.  The catch-all
+    ``0.0.0.0/0`` / ``::/0`` case is handled separately by AZ322 so we
+    don't double-flag it here.
+    """
+    desc = is_reserved(val)
+    if desc is None:
+        return
+    results.append(
+        _result(
+            "AZ319",
+            Severity.INFO,
+            f"{prefix}: {val} is a {desc} range (typically not seen in public WAF traffic)",
+            phase,
+            ref=ref,
+            field=f"{prefix}.matchValue",
+        )
+    )
 
 
 def _check_redundant_cidrs(

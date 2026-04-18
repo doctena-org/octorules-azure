@@ -858,6 +858,32 @@ class TestPrivateIPRanges:
         results = validate_rules([rule])
         assert "AZ319" in _ids(results)
 
+    # --- Regression for v0.1.8: strict containment narrowing. -------------
+    # Prior to v0.1.8, AZ319 used a bidirectional overlap check, which
+    # double-fired on catch-all (0.0.0.0/0) alongside AZ322 and produced
+    # false positives for public supernets that happened to engulf a
+    # reserved range.  Narrowed to strict containment to match the other
+    # four providers (CF/AWS/Google/Bunny).
+    def test_catch_all_does_not_double_flag_az319(self):
+        """0.0.0.0/0 is AZ322's job — AZ319 must not also fire."""
+        rule = make_normalised_rule(match_value=["0.0.0.0/0"])
+        results = validate_rules([rule])
+        az319_hits = [r for r in results if r.rule_id == "AZ319"]
+        assert az319_hits == []
+
+    def test_ipv6_catch_all_does_not_double_flag_az319(self):
+        rule = make_normalised_rule(match_value=["::/0"])
+        results = validate_rules([rule])
+        az319_hits = [r for r in results if r.rule_id == "AZ319"]
+        assert az319_hits == []
+
+    def test_public_supernet_engulfing_reserved_not_flagged(self):
+        # 8.0.0.0/4 contains 10.0.0.0/8 but is overwhelmingly public space.
+        # Strict containment: not a subset of any reserved range → no AZ319.
+        rule = make_normalised_rule(match_value=["8.0.0.0/4"])
+        results = validate_rules([rule])
+        assert "AZ319" not in _ids(results)
+
 
 # ---------------------------------------------------------------------------
 # AZ321: Selector on non-selector variable

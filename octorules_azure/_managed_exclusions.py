@@ -12,8 +12,9 @@ validate_extension, and dump_extension.
 """
 
 import logging
-import threading
 from dataclasses import dataclass, field
+
+from octorules.registration import idempotent_registration
 
 log = logging.getLogger(__name__)
 
@@ -256,28 +257,19 @@ class ManagedExclusionsFormatter:
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
-_registered = False
-_register_lock = threading.Lock()
-
-
+@idempotent_registration
 def register_managed_exclusions() -> None:
     """Register all managed exclusions hooks with the core extension system."""
-    global _registered
-    with _register_lock:
-        if _registered:
-            return
+    from octorules.extensions import (
+        register_apply_extension,
+        register_dump_extension,
+        register_format_extension,
+        register_plan_zone_hook,
+        register_validate_extension,
+    )
 
-        from octorules.extensions import (
-            register_apply_extension,
-            register_dump_extension,
-            register_format_extension,
-            register_plan_zone_hook,
-            register_validate_extension,
-        )
-
-        register_plan_zone_hook(_prefetch_managed_exclusions, _finalize_managed_exclusions)
-        register_apply_extension("azure_waf_managed_exclusions", _apply_managed_exclusions)
-        register_format_extension("azure_waf_managed_exclusions", ManagedExclusionsFormatter())
-        register_validate_extension(_validate_managed_exclusions)
-        register_dump_extension(_dump_managed_exclusions)
-        _registered = True
+    register_plan_zone_hook(_prefetch_managed_exclusions, _finalize_managed_exclusions)
+    register_apply_extension("azure_waf_managed_exclusions", _apply_managed_exclusions)
+    register_format_extension("azure_waf_managed_exclusions", ManagedExclusionsFormatter())
+    register_validate_extension(_validate_managed_exclusions)
+    register_dump_extension(_dump_managed_exclusions)

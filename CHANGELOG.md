@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] - 2026-04-18
+
+### Changed
+- **AZ319 narrowed to strict containment** (aligned with
+  CF/AWS/Google/Bunny). Previously used a bidirectional overlap check
+  that double-flagged catch-all CIDRs (``0.0.0.0/0`` / ``::/0``,
+  already covered by AZ322) and produced false positives for public
+  supernets that happened to engulf reserved ranges (e.g.
+  ``8.0.0.0/4``). Catch-alls are now exclusively handled by AZ322,
+  and arbitrary public supernets are no longer flagged. Configs with
+  unusual supernets will stop seeing AZ319 warnings on them.
+- Minimum ``octorules`` dependency: ``>=0.26.0`` (was ``>=0.24.0``).
+
 ## [0.1.7] - 2026-04-13
 
 ### Changed

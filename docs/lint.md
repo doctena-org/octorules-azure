@@ -599,12 +599,17 @@ Warns when an `IPMatch` value is not a valid IPv4/IPv6 address or CIDR.
 
 **Severity:** INFO
 
-Info-level notice when an IPMatch value overlaps with a private or reserved
-IP range (RFC 1918, loopback, link-local, RFC 6598). This includes both
-subnets of private ranges (e.g., `10.1.0.0/16`) and supernets that contain
-private ranges (e.g., `0.0.0.0/4` which contains `10.0.0.0/8`). These
-addresses are typically not seen in public WAF traffic and may indicate a
-configuration meant for a different environment.
+Info-level notice when an IPMatch value falls entirely within a private or
+reserved IP range (RFC 1918, loopback, link-local, RFC 6598, documentation,
+benchmarking, multicast, etc.). Such addresses are typically not seen in
+public WAF traffic and may indicate a configuration meant for a different
+environment.
+
+Uses strict containment as of v0.1.8 (aligned with CF / AWS / Google /
+Bunny). The catch-all CIDRs `0.0.0.0/0` and `::/0` are handled exclusively
+by AZ322 and do not fire AZ319. Public supernets that happen to engulf a
+reserved range (for example, `8.0.0.0/4`) are not flagged either —
+overwhelmingly public space is not a reserved-IP mistake.
 
 **Triggers on:**
 
@@ -612,8 +617,15 @@ configuration meant for a different environment.
         matchValue:
           - 10.0.0.0/8               # <-- private range
           - 192.168.1.0/24           # <-- subnet of private range
-          - 0.0.0.0/4                # <-- supernet containing 10.0.0.0/8
           - 127.0.0.1                # <-- loopback
+```
+
+**Does not trigger on:**
+
+```yaml
+        matchValue:
+          - 0.0.0.0/0                # AZ322 handles catch-all
+          - 8.0.0.0/4                # mostly public; intentional geofencing
 ```
 
 ### AZ320 -- Unknown GeoMatch country code
