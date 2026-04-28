@@ -1,14 +1,10 @@
 """Tests for Azure WAF validation rules."""
 
 import pytest
+from octorules.testing.lint import assert_lint, assert_no_lint
 
 from octorules_azure.validate import set_waf_type, validate_rules
 from tests.conftest import make_normalised_rule
-
-
-def _ids(results):
-    """Extract rule IDs from a list of LintResults."""
-    return [r.rule_id for r in results]
 
 
 # ---------------------------------------------------------------------------
@@ -35,12 +31,12 @@ class TestMissingRef:
         rule = make_normalised_rule()
         del rule["ref"]
         results = validate_rules([rule])
-        assert "AZ001" in _ids(results)
+        assert_lint(results, "AZ001")
 
     def test_empty_ref(self):
         rule = make_normalised_rule(ref="")
         results = validate_rules([rule])
-        assert "AZ001" in _ids(results)
+        assert_lint(results, "AZ001")
 
 
 # ---------------------------------------------------------------------------
@@ -50,17 +46,17 @@ class TestRefFormat:
     def test_starts_with_number(self):
         rule = make_normalised_rule(ref="1BadName")
         results = validate_rules([rule])
-        assert "AZ010" in _ids(results)
+        assert_lint(results, "AZ010")
 
     def test_contains_hyphen(self):
         rule = make_normalised_rule(ref="Bad-Name")
         results = validate_rules([rule])
-        assert "AZ010" in _ids(results)
+        assert_lint(results, "AZ010")
 
     def test_too_long(self):
         rule = make_normalised_rule(ref="A" * 129)
         results = validate_rules([rule])
-        assert "AZ010" in _ids(results)
+        assert_lint(results, "AZ010")
 
     def test_valid_underscore(self):
         rule = make_normalised_rule(ref="Good_Name_123")
@@ -75,28 +71,28 @@ class TestPriority:
         rule = make_normalised_rule()
         del rule["priority"]
         results = validate_rules([rule])
-        assert "AZ002" in _ids(results)
+        assert_lint(results, "AZ002")
 
     def test_negative_priority(self):
         rule = make_normalised_rule(priority=-1)
         results = validate_rules([rule])
-        assert "AZ100" in _ids(results)
+        assert_lint(results, "AZ100")
 
     def test_zero_priority(self):
         rule = make_normalised_rule(priority=0)
         results = validate_rules([rule])
-        assert "AZ100" in _ids(results)
+        assert_lint(results, "AZ100")
 
     def test_bool_priority(self):
         rule = make_normalised_rule(priority=True)
         results = validate_rules([rule])
-        assert "AZ100" in _ids(results)
+        assert_lint(results, "AZ100")
 
     def test_string_priority(self):
         rule = make_normalised_rule()
         rule["priority"] = "five"
         results = validate_rules([rule])
-        assert "AZ100" in _ids(results)
+        assert_lint(results, "AZ100")
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +105,7 @@ class TestDuplicatePriority:
             make_normalised_rule(ref="R2", priority=1),
         ]
         results = validate_rules(rules)
-        assert "AZ101" in _ids(results)
+        assert_lint(results, "AZ101")
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +118,7 @@ class TestPriorityGaps:
             make_normalised_rule(ref="R2", priority=5),
         ]
         results = validate_rules(rules)
-        assert "AZ102" in _ids(results)
+        assert_lint(results, "AZ102")
 
     def test_contiguous(self):
         rules = [
@@ -130,7 +126,7 @@ class TestPriorityGaps:
             make_normalised_rule(ref="R2", priority=2),
         ]
         results = validate_rules(rules)
-        assert "AZ102" not in _ids(results)
+        assert_no_lint(results, "AZ102")
 
 
 # ---------------------------------------------------------------------------
@@ -141,12 +137,12 @@ class TestAction:
         rule = make_normalised_rule()
         del rule["action"]
         results = validate_rules([rule])
-        assert "AZ003" in _ids(results)
+        assert_lint(results, "AZ003")
 
     def test_invalid_action(self):
         rule = make_normalised_rule(action="Deny")
         results = validate_rules([rule])
-        assert "AZ200" in _ids(results)
+        assert_lint(results, "AZ200")
 
     def test_valid_actions(self):
         for action in ("Allow", "Block", "Log", "Redirect", "AnomalyScoring", "JSChallenge"):
@@ -163,19 +159,19 @@ class TestMatchConditions:
         rule = make_normalised_rule()
         del rule["matchConditions"]
         results = validate_rules([rule])
-        assert "AZ004" in _ids(results)
+        assert_lint(results, "AZ004")
 
     def test_not_a_list(self):
         rule = make_normalised_rule()
         rule["matchConditions"] = "not-a-list"
         results = validate_rules([rule])
-        assert "AZ300" in _ids(results)
+        assert_lint(results, "AZ300")
 
     def test_empty_list(self):
         rule = make_normalised_rule()
         rule["matchConditions"] = []
         results = validate_rules([rule])
-        assert "AZ300" in _ids(results)
+        assert_lint(results, "AZ300")
 
     def test_exceeds_max(self):
         rule = make_normalised_rule()
@@ -190,7 +186,7 @@ class TestMatchConditions:
             }
         ] * 11
         results = validate_rules([rule])
-        assert "AZ301" in _ids(results)
+        assert_lint(results, "AZ301")
 
 
 # ---------------------------------------------------------------------------
@@ -200,22 +196,22 @@ class TestConditionDetails:
     def test_invalid_match_variable(self):
         rule = make_normalised_rule(match_variable="BadVar")
         results = validate_rules([rule])
-        assert "AZ310" in _ids(results)
+        assert_lint(results, "AZ310")
 
     def test_invalid_operator(self):
         rule = make_normalised_rule(operator="NotAnOp")
         results = validate_rules([rule])
-        assert "AZ311" in _ids(results)
+        assert_lint(results, "AZ311")
 
     def test_missing_match_value_for_non_any(self):
         rule = make_normalised_rule(operator="Contains", match_value=[])
         results = validate_rules([rule])
-        assert "AZ312" in _ids(results)
+        assert_lint(results, "AZ312")
 
     def test_ip_match_exceeds_limit(self):
         rule = make_normalised_rule(match_value=["10.0.0.1"] * 601)
         results = validate_rules([rule])
-        assert "AZ313" in _ids(results)
+        assert_lint(results, "AZ313")
 
     def test_string_match_exceeds_limit(self):
         rule = make_normalised_rule(
@@ -224,13 +220,13 @@ class TestConditionDetails:
             match_value=["a"] * 11,
         )
         results = validate_rules([rule])
-        assert "AZ313" in _ids(results)
+        assert_lint(results, "AZ313")
 
     def test_invalid_transform(self):
         rule = make_normalised_rule()
         rule["matchConditions"][0]["transforms"] = ["BadTransform"]
         results = validate_rules([rule])
-        assert "AZ314" in _ids(results)
+        assert_lint(results, "AZ314")
 
     def test_selector_required_for_request_header(self):
         rule = make_normalised_rule(
@@ -240,7 +236,7 @@ class TestConditionDetails:
         )
         rule["matchConditions"][0]["selector"] = None
         results = validate_rules([rule])
-        assert "AZ315" in _ids(results)
+        assert_lint(results, "AZ315")
 
     def test_empty_selector_warning(self):
         rule = make_normalised_rule(
@@ -250,22 +246,22 @@ class TestConditionDetails:
         )
         rule["matchConditions"][0]["selector"] = ""
         results = validate_rules([rule])
-        assert "AZ316" in _ids(results)
+        assert_lint(results, "AZ316")
 
     def test_invalid_regex(self):
         rule = make_normalised_rule(operator="RegEx", match_value=["[invalid"])
         results = validate_rules([rule])
-        assert "AZ317" in _ids(results)
+        assert_lint(results, "AZ317")
 
     def test_valid_regex(self):
         rule = make_normalised_rule(operator="RegEx", match_value=["^/admin.*"])
         results = validate_rules([rule])
-        assert "AZ317" not in _ids(results)
+        assert_no_lint(results, "AZ317")
 
     def test_invalid_cidr(self):
         rule = make_normalised_rule(match_value=["not-a-cidr"])
         results = validate_rules([rule])
-        assert "AZ318" in _ids(results)
+        assert_lint(results, "AZ318")
 
     def test_valid_cidr(self):
         rule = make_normalised_rule(match_value=["104.16.0.0/12", "1.1.1.1"])
@@ -274,17 +270,17 @@ class TestConditionDetails:
     def test_cidr_host_bits_set(self):
         rule = make_normalised_rule(match_value=["10.0.0.1/24"])
         results = validate_rules([rule])
-        assert "AZ337" in _ids(results)
+        assert_lint(results, "AZ337")
         assert "10.0.0.0/24" in results[0].message
 
     def test_cidr_host_bits_clean(self):
         rule = make_normalised_rule(match_value=["10.0.0.0/24"])
-        assert "AZ337" not in _ids(validate_rules([rule]))
+        assert_no_lint(validate_rules([rule]), "AZ337")
 
     def test_cidr_host_bits_ipv6(self):
         rule = make_normalised_rule(match_value=["2001:db8::1/32"])
         results = validate_rules([rule])
-        assert "AZ337" in _ids(results)
+        assert_lint(results, "AZ337")
 
     def test_unknown_country_code(self):
         rule = make_normalised_rule(
@@ -293,7 +289,7 @@ class TestConditionDetails:
             match_value=["us", "123"],  # lowercase and numeric are invalid format
         )
         results = validate_rules([rule])
-        assert "AZ320" in _ids(results)
+        assert_lint(results, "AZ320")
         assert sum(1 for r in results if r.rule_id == "AZ320") == 2
 
 
@@ -319,33 +315,33 @@ class TestRateLimit:
         rule = self._rate_rule()
         del rule["rateLimitDurationInMinutes"]
         results = validate_rules([rule])
-        assert "AZ400" in _ids(results)
+        assert_lint(results, "AZ400")
 
     def test_invalid_duration(self):
         rule = self._rate_rule(rateLimitDurationInMinutes=3)
         results = validate_rules([rule])
-        assert "AZ400" in _ids(results)
+        assert_lint(results, "AZ400")
 
     def test_missing_threshold(self):
         rule = self._rate_rule()
         del rule["rateLimitThreshold"]
         results = validate_rules([rule])
-        assert "AZ401" in _ids(results)
+        assert_lint(results, "AZ401")
 
     def test_threshold_too_low(self):
         rule = self._rate_rule(rateLimitThreshold=5)
         results = validate_rules([rule])
-        assert "AZ403" in _ids(results)
+        assert_lint(results, "AZ403")
 
     def test_threshold_too_high(self):
         rule = self._rate_rule(rateLimitThreshold=2_000_000)
         results = validate_rules([rule])
-        assert "AZ401" in _ids(results)
+        assert_lint(results, "AZ401")
 
     def test_invalid_group_by(self):
         rule = self._rate_rule(groupBy=[{"variableName": "BadVar"}])
         results = validate_rules([rule])
-        assert "AZ402" in _ids(results)
+        assert_lint(results, "AZ402")
 
 
 # ---------------------------------------------------------------------------
@@ -358,7 +354,7 @@ class TestDuplicateRef:
             make_normalised_rule(ref="Same", priority=2),
         ]
         results = validate_rules(rules)
-        assert "AZ022" in _ids(results)
+        assert_lint(results, "AZ022")
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +365,7 @@ class TestUnknownFields:
         rule = make_normalised_rule()
         rule["unknownField"] = "value"
         results = validate_rules([rule])
-        assert "AZ020" in _ids(results)
+        assert_lint(results, "AZ020")
 
 
 # ---------------------------------------------------------------------------
@@ -386,17 +382,17 @@ class TestBestPractice:
     def test_disabled_rule(self):
         rule = make_normalised_rule(enabled_state="Disabled")
         results = validate_rules([rule])
-        assert "AZ600" in _ids(results)
+        assert_lint(results, "AZ600")
 
     def test_log_action(self):
         rule = make_normalised_rule(action="Log")
         results = validate_rules([rule])
-        assert "AZ601" in _ids(results)
+        assert_lint(results, "AZ601")
 
     def test_enabled_rule_no_info(self):
         rule = make_normalised_rule(enabled_state="Enabled")
         results = validate_rules([rule])
-        assert "AZ600" not in _ids(results)
+        assert_no_lint(results, "AZ600")
 
 
 # ---------------------------------------------------------------------------
@@ -409,7 +405,7 @@ class TestConflictingTransforms:
         )
         rule["matchConditions"][0]["transforms"] = ["Lowercase", "Uppercase"]
         results = validate_rules([rule])
-        assert "AZ330" in _ids(results)
+        assert_lint(results, "AZ330")
 
     def test_duplicate_transform(self):
         rule = make_normalised_rule(
@@ -417,7 +413,7 @@ class TestConflictingTransforms:
         )
         rule["matchConditions"][0]["transforms"] = ["Lowercase", "Trim", "Lowercase"]
         results = validate_rules([rule])
-        assert "AZ330" in _ids(results)
+        assert_lint(results, "AZ330")
 
     def test_no_conflict(self):
         rule = make_normalised_rule(
@@ -425,7 +421,7 @@ class TestConflictingTransforms:
         )
         rule["matchConditions"][0]["transforms"] = ["Lowercase", "Trim"]
         results = validate_rules([rule])
-        assert "AZ330" not in _ids(results)
+        assert_no_lint(results, "AZ330")
 
     def test_single_transform_no_conflict(self):
         rule = make_normalised_rule(
@@ -433,7 +429,7 @@ class TestConflictingTransforms:
         )
         rule["matchConditions"][0]["transforms"] = ["Lowercase"]
         results = validate_rules([rule])
-        assert "AZ330" not in _ids(results)
+        assert_no_lint(results, "AZ330")
 
 
 # ---------------------------------------------------------------------------
@@ -443,22 +439,22 @@ class TestMatchValueTypes:
     def test_non_string_value(self):
         rule = make_normalised_rule(match_value=[123])
         results = validate_rules([rule])
-        assert "AZ331" in _ids(results)
+        assert_lint(results, "AZ331")
 
     def test_bool_value(self):
         rule = make_normalised_rule(match_value=[True])
         results = validate_rules([rule])
-        assert "AZ331" in _ids(results)
+        assert_lint(results, "AZ331")
 
     def test_all_strings_ok(self):
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "192.168.1.0/24"])
         results = validate_rules([rule])
-        assert "AZ331" not in _ids(results)
+        assert_no_lint(results, "AZ331")
 
     def test_mixed_types(self):
         rule = make_normalised_rule(match_value=["valid", 42])
         results = validate_rules([rule])
-        assert "AZ331" in _ids(results)
+        assert_lint(results, "AZ331")
 
 
 # ---------------------------------------------------------------------------
@@ -468,17 +464,17 @@ class TestRegexLength:
     def test_long_pattern(self):
         rule = make_normalised_rule(operator="RegEx", match_value=["a" * 257])
         results = validate_rules([rule])
-        assert "AZ332" in _ids(results)
+        assert_lint(results, "AZ332")
 
     def test_normal_pattern(self):
         rule = make_normalised_rule(operator="RegEx", match_value=["^/admin.*"])
         results = validate_rules([rule])
-        assert "AZ332" not in _ids(results)
+        assert_no_lint(results, "AZ332")
 
     def test_at_limit(self):
         rule = make_normalised_rule(operator="RegEx", match_value=["a" * 256])
         results = validate_rules([rule])
-        assert "AZ332" not in _ids(results)
+        assert_no_lint(results, "AZ332")
 
 
 # ---------------------------------------------------------------------------
@@ -498,13 +494,13 @@ class TestCatchAllAndDeadRules:
     def test_catch_all_detected(self):
         rules = [self._any_rule("CatchAll", 1)]
         results = validate_rules(rules)
-        assert "AZ340" in _ids(results)
+        assert_lint(results, "AZ340")
 
     def test_catch_all_with_log_not_terminal(self):
         """Log action is not terminal -- should NOT trigger AZ340."""
         rules = [self._any_rule("LogAll", 1, action="Log")]
         results = validate_rules(rules)
-        assert "AZ340" not in _ids(results)
+        assert_no_lint(results, "AZ340")
 
     def test_dead_rule_after_catch_all(self):
         rules = [
@@ -512,8 +508,8 @@ class TestCatchAllAndDeadRules:
             make_normalised_rule(ref="Unreachable", priority=2),
         ]
         results = validate_rules(rules)
-        assert "AZ340" in _ids(results)
-        assert "AZ341" in _ids(results)
+        assert_lint(results, "AZ340")
+        assert_lint(results, "AZ341")
 
     def test_no_dead_rules_when_no_catch_all(self):
         rules = [
@@ -521,14 +517,14 @@ class TestCatchAllAndDeadRules:
             make_normalised_rule(ref="R2", priority=2),
         ]
         results = validate_rules(rules)
-        assert "AZ340" not in _ids(results)
-        assert "AZ341" not in _ids(results)
+        assert_no_lint(results, "AZ340")
+        assert_no_lint(results, "AZ341")
 
     def test_non_any_conditions_not_catch_all(self):
         """A rule with IPMatch is NOT a catch-all."""
         rules = [make_normalised_rule(ref="IPBlock", priority=1)]
         results = validate_rules(rules)
-        assert "AZ340" not in _ids(results)
+        assert_no_lint(results, "AZ340")
 
     def test_multiple_dead_rules(self):
         rules = [
@@ -546,8 +542,8 @@ class TestCatchAllAndDeadRules:
             self._any_rule("CatchAll", 100),
         ]
         results = validate_rules(rules)
-        assert "AZ340" in _ids(results)
-        assert "AZ341" not in _ids(results)
+        assert_lint(results, "AZ340")
+        assert_no_lint(results, "AZ341")
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +564,7 @@ class TestRateWithoutCondition:
             groupBy=[{"variableName": "SocketAddr"}],
         )
         results = validate_rules([rule])
-        assert "AZ410" in _ids(results)
+        assert_lint(results, "AZ410")
 
     def test_rate_with_ip_match_no_warning(self):
         rule = make_normalised_rule(
@@ -581,7 +577,7 @@ class TestRateWithoutCondition:
             groupBy=[{"variableName": "SocketAddr"}],
         )
         results = validate_rules([rule])
-        assert "AZ410" not in _ids(results)
+        assert_no_lint(results, "AZ410")
 
     def test_match_rule_with_any_no_warning(self):
         """AZ410 only applies to RateLimitRule, not MatchRule."""
@@ -594,7 +590,7 @@ class TestRateWithoutCondition:
             match_value=[],
         )
         results = validate_rules([rule])
-        assert "AZ410" not in _ids(results)
+        assert_no_lint(results, "AZ410")
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +694,7 @@ class TestEdgeCases:
         rule = make_normalised_rule()
         rule["matchConditions"] = ["not-a-dict"]
         results = validate_rules([rule])
-        assert "AZ300" in _ids(results)
+        assert_lint(results, "AZ300")
 
     def test_empty_rules_list(self):
         assert validate_rules([]) == []
@@ -706,24 +702,23 @@ class TestEdgeCases:
     def test_rule_with_only_ref(self):
         """Minimal rule — should flag missing fields."""
         results = validate_rules([{"ref": "Bare"}])
-        ids = _ids(results)
-        assert "AZ002" in ids  # missing priority
-        assert "AZ003" in ids  # missing action
-        assert "AZ004" in ids  # missing matchConditions
+        assert_lint(results, "AZ002")  # missing priority
+        assert_lint(results, "AZ003")  # missing action
+        assert_lint(results, "AZ004")  # missing matchConditions
 
     def test_matchvalue_none(self):
         """matchValue=None for non-Any operator should trigger AZ312."""
         rule = make_normalised_rule(operator="Contains", match_variable="QueryString")
         rule["matchConditions"][0]["matchValue"] = None
         results = validate_rules([rule])
-        assert "AZ312" in _ids(results)
+        assert_lint(results, "AZ312")
 
     def test_priority_as_float(self):
         """Float priority should trigger AZ100."""
         rule = make_normalised_rule()
         rule["priority"] = 1.5
         results = validate_rules([rule])
-        assert "AZ100" in _ids(results)
+        assert_lint(results, "AZ100")
 
 
 # ---------------------------------------------------------------------------
@@ -733,24 +728,24 @@ class TestEnabledState:
     def test_invalid_value(self):
         rule = make_normalised_rule(enabled_state="Active")
         results = validate_rules([rule])
-        assert "AZ005" in _ids(results)
+        assert_lint(results, "AZ005")
 
     def test_valid_enabled(self):
         rule = make_normalised_rule(enabled_state="Enabled")
         results = validate_rules([rule])
-        assert "AZ005" not in _ids(results)
+        assert_no_lint(results, "AZ005")
 
     def test_valid_disabled(self):
         rule = make_normalised_rule(enabled_state="Disabled")
         results = validate_rules([rule])
-        assert "AZ005" not in _ids(results)
-        assert "AZ600" in _ids(results)  # info
+        assert_no_lint(results, "AZ005")
+        assert_lint(results, "AZ600")  # info
 
     def test_missing_enabled_state_ok(self):
         rule = make_normalised_rule()
         del rule["enabledState"]
         results = validate_rules([rule])
-        assert "AZ005" not in _ids(results)
+        assert_no_lint(results, "AZ005")
 
 
 # ---------------------------------------------------------------------------
@@ -760,12 +755,12 @@ class TestRuleType:
     def test_invalid_value(self):
         rule = make_normalised_rule(rule_type="CustomRule")
         results = validate_rules([rule])
-        assert "AZ006" in _ids(results)
+        assert_lint(results, "AZ006")
 
     def test_valid_match_rule(self):
         rule = make_normalised_rule(rule_type="MatchRule")
         results = validate_rules([rule])
-        assert "AZ006" not in _ids(results)
+        assert_no_lint(results, "AZ006")
 
     def test_valid_rate_limit_rule(self):
         rule = make_normalised_rule(
@@ -775,7 +770,7 @@ class TestRuleType:
             groupBy=[],
         )
         results = validate_rules([rule])
-        assert "AZ006" not in _ids(results)
+        assert_no_lint(results, "AZ006")
 
 
 # ---------------------------------------------------------------------------
@@ -786,19 +781,19 @@ class TestNegateCondition:
         rule = make_normalised_rule()
         rule["matchConditions"][0]["negateCondition"] = "true"
         results = validate_rules([rule])
-        assert "AZ021" in _ids(results)
+        assert_lint(results, "AZ021")
 
     def test_int_negate(self):
         rule = make_normalised_rule()
         rule["matchConditions"][0]["negateCondition"] = 1
         results = validate_rules([rule])
-        assert "AZ021" in _ids(results)
+        assert_lint(results, "AZ021")
 
     def test_bool_negate_ok(self):
         rule = make_normalised_rule()
         rule["matchConditions"][0]["negateCondition"] = True
         results = validate_rules([rule])
-        assert "AZ021" not in _ids(results)
+        assert_no_lint(results, "AZ021")
 
 
 # ---------------------------------------------------------------------------
@@ -822,19 +817,19 @@ class TestPrivateIPRanges:
     def test_private_ranges_flagged(self, cidr):
         rule = make_normalised_rule(match_value=[cidr])
         results = validate_rules([rule])
-        assert "AZ319" in _ids(results)
+        assert_lint(results, "AZ319")
 
     @pytest.mark.parametrize("cidr", ["8.8.8.8", "1.1.1.0/24", "104.16.0.0/12"])
     def test_public_ranges_not_flagged(self, cidr):
         rule = make_normalised_rule(match_value=[cidr])
         results = validate_rules([rule])
-        assert "AZ319" not in _ids(results)
+        assert_no_lint(results, "AZ319")
 
     def test_documentation_rfc5737_flagged(self):
         """RFC 5737 documentation address (192.0.2.1) should now be flagged."""
         rule = make_normalised_rule(match_value=["192.0.2.1"])
         results = validate_rules([rule])
-        assert "AZ319" in _ids(results)
+        assert_lint(results, "AZ319")
         az319 = [r for r in results if r.rule_id == "AZ319"]
         assert "documentation" in az319[0].message
 
@@ -842,7 +837,7 @@ class TestPrivateIPRanges:
         """IPv6 documentation prefix (2001:db8::1) should now be flagged."""
         rule = make_normalised_rule(match_value=["2001:db8::1"])
         results = validate_rules([rule])
-        assert "AZ319" in _ids(results)
+        assert_lint(results, "AZ319")
         az319 = [r for r in results if r.rule_id == "AZ319"]
         assert "documentation" in az319[0].message
 
@@ -850,13 +845,13 @@ class TestPrivateIPRanges:
         """RFC 2544 benchmark testing range should be flagged."""
         rule = make_normalised_rule(match_value=["198.18.0.1"])
         results = validate_rules([rule])
-        assert "AZ319" in _ids(results)
+        assert_lint(results, "AZ319")
 
     def test_multicast_flagged(self):
         """Multicast range (224.0.0.0/4) should be flagged."""
         rule = make_normalised_rule(match_value=["224.0.0.1"])
         results = validate_rules([rule])
-        assert "AZ319" in _ids(results)
+        assert_lint(results, "AZ319")
 
     # --- Regression for v0.1.8: strict containment narrowing. -------------
     # Prior to v0.1.8, AZ319 used a bidirectional overlap check, which
@@ -882,7 +877,7 @@ class TestPrivateIPRanges:
         # Strict containment: not a subset of any reserved range → no AZ319.
         rule = make_normalised_rule(match_value=["8.0.0.0/4"])
         results = validate_rules([rule])
-        assert "AZ319" not in _ids(results)
+        assert_no_lint(results, "AZ319")
 
 
 # ---------------------------------------------------------------------------
@@ -893,7 +888,7 @@ class TestSelectorOnNonSelectorVar:
         rule = make_normalised_rule(match_variable="RemoteAddr")
         rule["matchConditions"][0]["selector"] = "something"
         results = validate_rules([rule])
-        assert "AZ321" in _ids(results)
+        assert_lint(results, "AZ321")
 
     def test_selector_on_request_header_ok(self):
         rule = make_normalised_rule(
@@ -903,13 +898,13 @@ class TestSelectorOnNonSelectorVar:
         )
         rule["matchConditions"][0]["selector"] = "User-Agent"
         results = validate_rules([rule])
-        assert "AZ321" not in _ids(results)
+        assert_no_lint(results, "AZ321")
 
     def test_no_selector_on_remote_addr_ok(self):
         rule = make_normalised_rule()
         rule["matchConditions"][0]["selector"] = None
         results = validate_rules([rule])
-        assert "AZ321" not in _ids(results)
+        assert_no_lint(results, "AZ321")
 
 
 # ---------------------------------------------------------------------------
@@ -919,17 +914,17 @@ class TestCatchAllCIDR:
     def test_ipv4_catch_all(self):
         rule = make_normalised_rule(match_value=["0.0.0.0/0"])
         results = validate_rules([rule])
-        assert "AZ322" in _ids(results)
+        assert_lint(results, "AZ322")
 
     def test_ipv6_catch_all(self):
         rule = make_normalised_rule(match_value=["::/0"])
         results = validate_rules([rule])
-        assert "AZ322" in _ids(results)
+        assert_lint(results, "AZ322")
 
     def test_normal_cidr_ok(self):
         rule = make_normalised_rule(match_value=["104.16.0.0/12"])
         results = validate_rules([rule])
-        assert "AZ322" not in _ids(results)
+        assert_no_lint(results, "AZ322")
 
 
 # ---------------------------------------------------------------------------
@@ -942,7 +937,7 @@ class TestGeoMatchManyCountries:
             operator="GeoMatch", match_variable="RemoteAddr", match_value=codes
         )
         results = validate_rules([rule])
-        assert "AZ323" in _ids(results)
+        assert_lint(results, "AZ323")
 
     def test_10_countries_ok(self):
         rule = make_normalised_rule(
@@ -951,7 +946,7 @@ class TestGeoMatchManyCountries:
             match_value=["US", "CA", "GB", "DE", "FR", "JP", "AU", "NZ", "IE", "NL"],
         )
         results = validate_rules([rule])
-        assert "AZ323" not in _ids(results)
+        assert_no_lint(results, "AZ323")
 
 
 # ---------------------------------------------------------------------------
@@ -962,13 +957,13 @@ class TestNegatedAny:
         rule = make_normalised_rule(match_variable="RequestUri", operator="Any", match_value=[])
         rule["matchConditions"][0]["negateCondition"] = True
         results = validate_rules([rule])
-        assert "AZ324" in _ids(results)
+        assert_lint(results, "AZ324")
 
     def test_non_negated_any_ok(self):
         rule = make_normalised_rule(match_variable="RequestUri", operator="Any", match_value=[])
         rule["matchConditions"][0]["negateCondition"] = False
         results = validate_rules([rule])
-        assert "AZ324" not in _ids(results)
+        assert_no_lint(results, "AZ324")
 
 
 # ---------------------------------------------------------------------------
@@ -989,14 +984,14 @@ class TestTransformsOnNonStringOps:
         rule = make_normalised_rule(operator=op, match_variable="RemoteAddr", match_value=mv)
         rule["matchConditions"][0]["transforms"] = ["Lowercase"]
         results = validate_rules([rule])
-        assert "AZ333" in _ids(results)
+        assert_lint(results, "AZ333")
 
     @pytest.mark.parametrize("op", ["Contains", "Equal", "BeginsWith", "RegEx"])
     def test_transforms_ok_on_string_ops(self, op):
         rule = make_normalised_rule(operator=op, match_variable="QueryString", match_value=["test"])
         rule["matchConditions"][0]["transforms"] = ["Lowercase"]
         results = validate_rules([rule])
-        assert "AZ333" not in _ids(results)
+        assert_no_lint(results, "AZ333")
 
 
 # ---------------------------------------------------------------------------
@@ -1006,19 +1001,19 @@ class TestDuplicateMatchValue:
     def test_duplicate_ip(self):
         rule = make_normalised_rule(match_value=["10.0.0.1", "10.0.0.1"])
         results = validate_rules([rule])
-        assert "AZ334" in _ids(results)
+        assert_lint(results, "AZ334")
 
     def test_duplicate_string_case_insensitive(self):
         rule = make_normalised_rule(
             operator="Contains", match_variable="QueryString", match_value=["Test", "test"]
         )
         results = validate_rules([rule])
-        assert "AZ334" in _ids(results)
+        assert_lint(results, "AZ334")
 
     def test_unique_values_ok(self):
         rule = make_normalised_rule(match_value=["10.0.0.1", "10.0.0.2"])
         results = validate_rules([rule])
-        assert "AZ334" not in _ids(results)
+        assert_no_lint(results, "AZ334")
 
 
 # ---------------------------------------------------------------------------
@@ -1031,7 +1026,7 @@ class TestAllDisabled:
             make_normalised_rule(ref="R2", priority=2, enabled_state="Disabled"),
         ]
         results = validate_rules(rules)
-        assert "AZ602" in _ids(results)
+        assert_lint(results, "AZ602")
 
     def test_mixed_states_ok(self):
         rules = [
@@ -1039,12 +1034,12 @@ class TestAllDisabled:
             make_normalised_rule(ref="R2", priority=2, enabled_state="Enabled"),
         ]
         results = validate_rules(rules)
-        assert "AZ602" not in _ids(results)
+        assert_no_lint(results, "AZ602")
 
     def test_all_enabled_ok(self):
         rules = [make_normalised_rule(ref="R1", priority=1)]
         results = validate_rules(rules)
-        assert "AZ602" not in _ids(results)
+        assert_no_lint(results, "AZ602")
 
 
 # ---------------------------------------------------------------------------
@@ -1061,7 +1056,7 @@ class TestAllowBypassesManaged:
             match_value=[],
         )
         results = validate_rules([rule])
-        assert "AZ603" in _ids(results)
+        assert_lint(results, "AZ603")
 
     def test_block_catch_all_no_warning(self):
         rule = make_normalised_rule(
@@ -1073,12 +1068,12 @@ class TestAllowBypassesManaged:
             match_value=[],
         )
         results = validate_rules([rule])
-        assert "AZ603" not in _ids(results)
+        assert_no_lint(results, "AZ603")
 
     def test_allow_with_condition_ok(self):
         rule = make_normalised_rule(ref="AllowIP", priority=1, action="Allow")
         results = validate_rules([rule])
-        assert "AZ603" not in _ids(results)
+        assert_no_lint(results, "AZ603")
 
     @pytest.mark.parametrize("action", ["Redirect", "JSChallenge", "Log"])
     def test_non_allow_catch_all_no_warning(self, action):
@@ -1091,7 +1086,7 @@ class TestAllowBypassesManaged:
             match_value=[],
         )
         results = validate_rules([rule])
-        assert "AZ603" not in _ids(results)
+        assert_no_lint(results, "AZ603")
 
 
 # ---------------------------------------------------------------------------
@@ -1103,17 +1098,17 @@ class TestAnyWithMatchValue:
             match_variable="RequestUri", operator="Any", match_value=["test"]
         )
         results = validate_rules([rule])
-        assert "AZ325" in _ids(results)
+        assert_lint(results, "AZ325")
 
     def test_any_with_empty_list_ok(self):
         rule = make_normalised_rule(match_variable="RequestUri", operator="Any", match_value=[])
         results = validate_rules([rule])
-        assert "AZ325" not in _ids(results)
+        assert_no_lint(results, "AZ325")
 
     def test_non_any_with_values_ok(self):
         rule = make_normalised_rule(operator="IPMatch", match_value=["104.16.0.0/12"])
         results = validate_rules([rule])
-        assert "AZ325" not in _ids(results)
+        assert_no_lint(results, "AZ325")
 
 
 # ---------------------------------------------------------------------------
@@ -1125,20 +1120,20 @@ class TestEmptyStringMatchValue:
             operator="Contains", match_variable="QueryString", match_value=["", "test"]
         )
         results = validate_rules([rule])
-        assert "AZ335" in _ids(results)
+        assert_lint(results, "AZ335")
 
     def test_empty_string_in_ip_match_not_flagged(self):
         """AZ335 only fires for string operators, not IPMatch."""
         rule = make_normalised_rule(operator="IPMatch", match_value=[""])
         results = validate_rules([rule])
-        assert "AZ335" not in _ids(results)
+        assert_no_lint(results, "AZ335")
 
     def test_non_empty_strings_ok(self):
         rule = make_normalised_rule(
             operator="Contains", match_variable="QueryString", match_value=["test"]
         )
         results = validate_rules([rule])
-        assert "AZ335" not in _ids(results)
+        assert_no_lint(results, "AZ335")
 
 
 # ---------------------------------------------------------------------------
@@ -1166,7 +1161,7 @@ class TestDuplicateVariableOperator:
             },
         ]
         results = validate_rules([rule])
-        assert "AZ336" in _ids(results)
+        assert_lint(results, "AZ336")
 
     def test_same_variable_different_operators_ok(self):
         rule = make_normalised_rule()
@@ -1189,7 +1184,7 @@ class TestDuplicateVariableOperator:
             },
         ]
         results = validate_rules([rule])
-        assert "AZ336" not in _ids(results)
+        assert_no_lint(results, "AZ336")
 
     def test_different_variables_same_operator_ok(self):
         rule = make_normalised_rule()
@@ -1212,7 +1207,7 @@ class TestDuplicateVariableOperator:
             },
         ]
         results = validate_rules([rule])
-        assert "AZ336" not in _ids(results)
+        assert_no_lint(results, "AZ336")
 
 
 # ---------------------------------------------------------------------------
@@ -1222,17 +1217,17 @@ class TestRateFieldsOnMatchRule:
     def test_duration_on_match_rule(self):
         rule = make_normalised_rule(rateLimitDurationInMinutes=1)
         results = validate_rules([rule])
-        assert "AZ411" in _ids(results)
+        assert_lint(results, "AZ411")
 
     def test_threshold_on_match_rule(self):
         rule = make_normalised_rule(rateLimitThreshold=100)
         results = validate_rules([rule])
-        assert "AZ411" in _ids(results)
+        assert_lint(results, "AZ411")
 
     def test_group_by_on_match_rule(self):
         rule = make_normalised_rule(groupBy=[{"variableName": "SocketAddr"}])
         results = validate_rules([rule])
-        assert "AZ411" in _ids(results)
+        assert_lint(results, "AZ411")
 
     def test_rate_fields_on_rate_rule_ok(self):
         rule = make_normalised_rule(
@@ -1242,13 +1237,13 @@ class TestRateFieldsOnMatchRule:
             groupBy=[{"variableName": "SocketAddr"}],
         )
         results = validate_rules([rule])
-        assert "AZ411" not in _ids(results)
+        assert_no_lint(results, "AZ411")
 
     def test_empty_group_by_no_warning(self):
         """Empty groupBy list is not confusing."""
         rule = make_normalised_rule(groupBy=[])
         results = validate_rules([rule])
-        assert "AZ411" not in _ids(results)
+        assert_no_lint(results, "AZ411")
 
 
 # ---------------------------------------------------------------------------
@@ -1260,14 +1255,14 @@ class TestCatchAllIPMatch:
             ref="CatchAllIP", priority=1, action="Block", match_value=["0.0.0.0/0"]
         )
         results = validate_rules([rule])
-        assert "AZ340" in _ids(results)
+        assert_lint(results, "AZ340")
 
     def test_ipv6_catch_all_detected(self):
         rule = make_normalised_rule(
             ref="CatchAllIPv6", priority=1, action="Block", match_value=["::/0"]
         )
         results = validate_rules([rule])
-        assert "AZ340" in _ids(results)
+        assert_lint(results, "AZ340")
 
     def test_ip_catch_all_makes_next_rule_dead(self):
         rules = [
@@ -1277,14 +1272,14 @@ class TestCatchAllIPMatch:
             make_normalised_rule(ref="Dead", priority=2),
         ]
         results = validate_rules(rules)
-        assert "AZ341" in _ids(results)
+        assert_lint(results, "AZ341")
 
     def test_normal_ip_range_not_catch_all(self):
         rule = make_normalised_rule(
             ref="NormalIP", priority=1, action="Block", match_value=["104.16.0.0/12"]
         )
         results = validate_rules([rule])
-        assert "AZ340" not in _ids(results)
+        assert_no_lint(results, "AZ340")
 
 
 # ---------------------------------------------------------------------------
@@ -1298,7 +1293,7 @@ class TestParametrizedInvalid:
     def test_invalid_match_variables(self, variable):
         rule = make_normalised_rule(match_variable=variable)
         results = validate_rules([rule])
-        assert "AZ310" in _ids(results)
+        assert_lint(results, "AZ310")
 
     @pytest.mark.parametrize(
         "operator",
@@ -1307,7 +1302,7 @@ class TestParametrizedInvalid:
     def test_invalid_operators(self, operator):
         rule = make_normalised_rule(operator=operator, match_value=["test"])
         results = validate_rules([rule])
-        assert "AZ311" in _ids(results)
+        assert_lint(results, "AZ311")
 
     @pytest.mark.parametrize(
         "transform",
@@ -1319,7 +1314,7 @@ class TestParametrizedInvalid:
         )
         rule["matchConditions"][0]["transforms"] = [transform]
         results = validate_rules([rule])
-        assert "AZ314" in _ids(results)
+        assert_lint(results, "AZ314")
 
     @pytest.mark.parametrize(
         "action",
@@ -1328,7 +1323,7 @@ class TestParametrizedInvalid:
     def test_invalid_actions(self, action):
         rule = make_normalised_rule(action=action)
         results = validate_rules([rule])
-        assert "AZ200" in _ids(results)
+        assert_lint(results, "AZ200")
 
 
 # ---------------------------------------------------------------------------
@@ -1346,14 +1341,14 @@ class TestWafTypeAware:
         set_waf_type("app_gateway")
         rule = make_normalised_rule(action=action)
         results = validate_rules([rule])
-        assert "AZ201" in _ids(results)
+        assert_lint(results, "AZ201")
 
     @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring"])
     def test_fd_only_action_on_front_door_ok(self, action):
         set_waf_type("front_door")
         rule = make_normalised_rule(action=action)
         results = validate_rules([rule])
-        assert "AZ201" not in _ids(results)
+        assert_no_lint(results, "AZ201")
 
     def test_jschallenge_ok_on_both(self):
         """JSChallenge is valid on both Front Door and App Gateway."""
@@ -1376,33 +1371,33 @@ class TestWafTypeAware:
         set_waf_type("")
         rule = make_normalised_rule(action="Redirect")
         results = validate_rules([rule])
-        assert "AZ201" not in _ids(results)
+        assert_no_lint(results, "AZ201")
 
     # AZ326: FD-only operator on App Gateway
     def test_service_tag_match_on_app_gateway(self):
         set_waf_type("app_gateway")
         rule = make_normalised_rule(operator="ServiceTagMatch", match_value=["AzureFrontDoor"])
         results = validate_rules([rule])
-        assert "AZ326" in _ids(results)
+        assert_lint(results, "AZ326")
 
     def test_service_tag_match_on_front_door_ok(self):
         set_waf_type("front_door")
         rule = make_normalised_rule(operator="ServiceTagMatch", match_value=["AzureFrontDoor"])
         results = validate_rules([rule])
-        assert "AZ326" not in _ids(results)
+        assert_no_lint(results, "AZ326")
 
     # AZ327: FD-only variable on App Gateway
     def test_socket_addr_on_app_gateway(self):
         set_waf_type("app_gateway")
         rule = make_normalised_rule(match_variable="SocketAddr")
         results = validate_rules([rule])
-        assert "AZ327" in _ids(results)
+        assert_lint(results, "AZ327")
 
     def test_socket_addr_on_front_door_ok(self):
         set_waf_type("front_door")
         rule = make_normalised_rule(match_variable="SocketAddr")
         results = validate_rules([rule])
-        assert "AZ327" not in _ids(results)
+        assert_no_lint(results, "AZ327")
 
     # AZ328: AG-only transform on Front Door
     def test_html_entity_decode_on_front_door(self):
@@ -1412,7 +1407,7 @@ class TestWafTypeAware:
         )
         rule["matchConditions"][0]["transforms"] = ["HtmlEntityDecode"]
         results = validate_rules([rule])
-        assert "AZ328" in _ids(results)
+        assert_lint(results, "AZ328")
 
     def test_html_entity_decode_on_app_gateway_ok(self):
         set_waf_type("app_gateway")
@@ -1421,41 +1416,41 @@ class TestWafTypeAware:
         )
         rule["matchConditions"][0]["transforms"] = ["HtmlEntityDecode"]
         results = validate_rules([rule])
-        assert "AZ328" not in _ids(results)
+        assert_no_lint(results, "AZ328")
 
     # AZ103: Front Door priority range
     def test_priority_exceeds_fd_max(self):
         set_waf_type("front_door")
         rule = make_normalised_rule(priority=101)
         results = validate_rules([rule])
-        assert "AZ103" in _ids(results)
+        assert_lint(results, "AZ103")
         assert "101" in next(r for r in results if r.rule_id == "AZ103").message
 
     def test_priority_at_fd_max(self):
         set_waf_type("front_door")
         rule = make_normalised_rule(priority=100)
         results = validate_rules([rule])
-        assert "AZ103" not in _ids(results)
+        assert_no_lint(results, "AZ103")
 
     def test_priority_1_fd_ok(self):
         set_waf_type("front_door")
         rule = make_normalised_rule(priority=1)
         results = validate_rules([rule])
-        assert "AZ103" not in _ids(results)
+        assert_no_lint(results, "AZ103")
 
     def test_priority_high_on_app_gateway_ok(self):
         """App Gateway allows priorities well above 100."""
         set_waf_type("app_gateway")
         rule = make_normalised_rule(priority=500)
         results = validate_rules([rule])
-        assert "AZ103" not in _ids(results)
+        assert_no_lint(results, "AZ103")
 
     def test_priority_high_no_waf_type_ok(self):
         """When waf_type is not set, no AZ103 should fire."""
         set_waf_type("")
         rule = make_normalised_rule(priority=200)
         results = validate_rules([rule])
-        assert "AZ103" not in _ids(results)
+        assert_no_lint(results, "AZ103")
 
 
 # ---------------------------------------------------------------------------
@@ -1466,7 +1461,7 @@ class TestRedundantCIDRs:
         """10.1.0.0/16 is a subnet of 10.0.0.0/8 -- redundant."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "10.1.0.0/16"])
         results = validate_rules([rule])
-        assert "AZ338" in _ids(results)
+        assert_lint(results, "AZ338")
         msg = next(r for r in results if r.rule_id == "AZ338").message
         assert "10.1.0.0/16" in msg
         assert "10.0.0.0/8" in msg
@@ -1475,58 +1470,58 @@ class TestRedundantCIDRs:
         """Order doesn't matter -- smaller listed first, larger second."""
         rule = make_normalised_rule(match_value=["10.1.0.0/16", "10.0.0.0/8"])
         results = validate_rules([rule])
-        assert "AZ338" in _ids(results)
+        assert_lint(results, "AZ338")
 
     def test_ipv4_no_overlap(self):
         """Disjoint CIDRs should not trigger."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "192.168.0.0/16"])
         results = validate_rules([rule])
-        assert "AZ338" not in _ids(results)
+        assert_no_lint(results, "AZ338")
 
     def test_ipv6_subnet_of(self):
         """2001:db8:1::/48 is a subnet of 2001:db8::/32."""
         rule = make_normalised_rule(match_value=["2001:db8::/32", "2001:db8:1::/48"])
         results = validate_rules([rule])
-        assert "AZ338" in _ids(results)
+        assert_lint(results, "AZ338")
 
     def test_ipv6_no_overlap(self):
         rule = make_normalised_rule(match_value=["2001:db8::/32", "2001:db9::/32"])
         results = validate_rules([rule])
-        assert "AZ338" not in _ids(results)
+        assert_no_lint(results, "AZ338")
 
     def test_no_cross_version_comparison(self):
         """IPv4 and IPv6 should not be compared to each other."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "2001:db8::/32"])
         results = validate_rules([rule])
-        assert "AZ338" not in _ids(results)
+        assert_no_lint(results, "AZ338")
 
     def test_single_cidr_ok(self):
         """Single entry cannot be redundant."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8"])
         results = validate_rules([rule])
-        assert "AZ338" not in _ids(results)
+        assert_no_lint(results, "AZ338")
 
     def test_invalid_cidr_skipped(self):
         """Invalid CIDRs should not crash the check."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "not-a-cidr", "10.1.0.0/16"])
         results = validate_rules([rule])
         # AZ338 still fires for the valid pair
-        assert "AZ338" in _ids(results)
+        assert_lint(results, "AZ338")
         # AZ318 fires for the invalid one
-        assert "AZ318" in _ids(results)
+        assert_lint(results, "AZ318")
 
     def test_host_ip_subnet_of_cidr(self):
         """A bare IP (treated as /32) inside a CIDR is redundant."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "10.1.2.3"])
         results = validate_rules([rule])
-        assert "AZ338" in _ids(results)
+        assert_lint(results, "AZ338")
 
     def test_identical_cidrs_not_flagged(self):
         """Exact duplicates are handled by AZ334, not AZ338."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "10.0.0.0/8"])
         results = validate_rules([rule])
-        assert "AZ338" not in _ids(results)
-        assert "AZ334" in _ids(results)
+        assert_no_lint(results, "AZ338")
+        assert_lint(results, "AZ334")
 
     def test_one_warning_per_condition(self):
         """Even with multiple overlaps, only one AZ338 per condition."""
@@ -1539,9 +1534,9 @@ class TestRedundantCIDRs:
         """CIDRs with host bits set are normalised (strict=False) before comparison."""
         rule = make_normalised_rule(match_value=["10.0.0.0/8", "10.1.0.1/16"])
         results = validate_rules([rule])
-        assert "AZ338" in _ids(results)
+        assert_lint(results, "AZ338")
         # AZ337 also fires for the host-bits issue
-        assert "AZ337" in _ids(results)
+        assert_lint(results, "AZ337")
 
 
 # ---------------------------------------------------------------------------
@@ -1551,21 +1546,21 @@ class TestRuleEntryNotDict:
     def test_string_entry(self):
         """Non-dict rule entry produces AZ023 error."""
         results = validate_rules(["not a dict"])
-        assert "AZ023" in _ids(results)
+        assert_lint(results, "AZ023")
 
     def test_int_entry(self):
         results = validate_rules([42])
-        assert "AZ023" in _ids(results)
+        assert_lint(results, "AZ023")
 
     def test_list_entry(self):
         results = validate_rules([[1, 2, 3]])
-        assert "AZ023" in _ids(results)
+        assert_lint(results, "AZ023")
 
     def test_mixed_valid_and_invalid(self):
         """Valid dict rules still validated alongside non-dict entries."""
         rule = make_normalised_rule()
         results = validate_rules(["bad", rule])
-        assert "AZ023" in _ids(results)
+        assert_lint(results, "AZ023")
         # The valid rule should not produce AZ023
         az023_count = sum(1 for r in results if r.rule_id == "AZ023")
         assert az023_count == 1

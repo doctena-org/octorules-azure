@@ -1,13 +1,19 @@
 """Tests for Azure WAF linter plugin."""
 
 from octorules.linter.engine import LintContext
+from octorules.linter.plugin import get_registered_plugins
+from octorules.testing.lint import assert_lint, assert_no_lint
 
+from octorules_azure.linter import register_azure_linter
 from octorules_azure.linter._plugin import azure_lint
 
 
-def _ids(ctx):
-    """Extract rule IDs from a LintContext."""
-    return [r.rule_id for r in ctx.results]
+class TestRegistration:
+    def test_idempotent_registration(self):
+        """Calling register_azure_linter() again should be a no-op."""
+        count_before = len(get_registered_plugins())
+        register_azure_linter()
+        assert len(get_registered_plugins()) == count_before
 
 
 class TestAzureLint:
@@ -35,7 +41,7 @@ class TestAzureLint:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ001" in _ids(ctx)
+        assert_lint(ctx, "AZ001")
 
     def test_non_azure_phases_ignored(self):
         rules_data = {
@@ -104,8 +110,7 @@ class TestAzureLint:
         rules_data = {"azure_waf_custom_rules": "not a list"}
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        rule_ids = _ids(ctx)
-        assert "AZ024" in rule_ids
+        assert_lint(ctx, "AZ024")
         result = next(r for r in ctx.results if r.rule_id == "AZ024")
         assert result.phase == "azure_waf_custom_rules"
         assert "not a list" in result.message
@@ -114,8 +119,7 @@ class TestAzureLint:
         rules_data = {"azure_waf_custom_rules": {"key": "value"}}
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        rule_ids = _ids(ctx)
-        assert "AZ024" in rule_ids
+        assert_lint(ctx, "AZ024")
 
     def test_non_list_phase_skipped_by_filter(self):
         rules_data = {"azure_waf_custom_rules": "not a list"}
@@ -158,7 +162,7 @@ class TestCrossPhaseChecks:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ520" in _ids(ctx)
+        assert_lint(ctx, "AZ520")
 
     def test_duplicate_match_conditions_reordered(self):
         """AZ520 detects duplicates even when conditions are in different order."""
@@ -253,7 +257,7 @@ class TestCrossPhaseChecks:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ520" not in _ids(ctx)
+        assert_no_lint(ctx, "AZ520")
 
     def test_no_duplicate_when_different_conditions(self):
         rules_data = {
@@ -296,7 +300,7 @@ class TestCrossPhaseChecks:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ520" not in _ids(ctx)
+        assert_no_lint(ctx, "AZ520")
 
 
 class TestTotalRuleCount:
@@ -337,7 +341,7 @@ class TestTotalRuleCount:
         # 60 + 50 = 110 > 100
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ501" in _ids(ctx)
+        assert_lint(ctx, "AZ501")
 
     def test_under_limit(self):
         rules_data = {
@@ -345,7 +349,7 @@ class TestTotalRuleCount:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ501" not in _ids(ctx)
+        assert_no_lint(ctx, "AZ501")
 
     def test_managed_rules_excluded_from_count(self):
         """AZ501 must not count managed rule sets toward the 100-custom-rule limit."""
@@ -368,7 +372,7 @@ class TestTotalRuleCount:
         # 99 custom + 2 managed = 101 entries total, but only 99 custom count
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ501" not in _ids(ctx)
+        assert_no_lint(ctx, "AZ501")
 
 
 class TestCrossPhasePriorities:
@@ -407,7 +411,7 @@ class TestCrossPhasePriorities:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ521" in _ids(ctx)
+        assert_lint(ctx, "AZ521")
 
     def test_no_duplicate_different_priorities(self):
         rules_data = {
@@ -423,7 +427,7 @@ class TestCrossPhasePriorities:
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
-        assert "AZ521" not in _ids(ctx)
+        assert_no_lint(ctx, "AZ521")
 
 
 class TestCrossPhaseRegexCount:

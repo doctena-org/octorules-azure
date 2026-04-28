@@ -3,19 +3,16 @@
 from unittest.mock import MagicMock
 
 from octorules.provider.base import PhaseRulesResult, Scope
+from octorules.testing.lint import assert_lint, assert_no_lint
 
 from octorules_azure._adapters import AppGatewayAdapter, FrontDoorAdapter
 from octorules_azure.provider import AzureWafProvider
 from octorules_azure.validate import set_waf_type, validate_managed_rules
 from tests.conftest import _make_ag_policy, _make_fd_policy
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def _ids(results):
-    """Extract rule IDs from a list of LintResults."""
-    return [r.rule_id for r in results]
 
 
 def _managed_rule_set(
@@ -805,13 +802,13 @@ class TestValidateManagedRef:
         rule = _managed_rule_set()
         del rule["ref"]
         results = validate_managed_rules([rule])
-        assert "AZ700" in _ids(results)
+        assert_lint(results, "AZ700")
 
     def test_empty_ref(self):
         rule = _managed_rule_set()
         rule["ref"] = ""
         results = validate_managed_rules([rule])
-        assert "AZ700" in _ids(results)
+        assert_lint(results, "AZ700")
 
     def test_duplicate_refs(self):
         rules = [
@@ -819,8 +816,7 @@ class TestValidateManagedRef:
             _managed_rule_set(rule_set_type="Microsoft_DefaultRuleSet"),
         ]
         results = validate_managed_rules(rules)
-        ids = _ids(results)
-        assert "AZ700" in ids  # duplicate ref
+        assert_lint(results, "AZ700")  # duplicate ref
 
 
 class TestValidateRuleSetType:
@@ -830,19 +826,19 @@ class TestValidateRuleSetType:
         rule = _managed_rule_set()
         del rule["ruleSetType"]
         results = validate_managed_rules([rule])
-        assert "AZ701" in _ids(results)
+        assert_lint(results, "AZ701")
 
     def test_empty_rule_set_type(self):
         rule = _managed_rule_set()
         rule["ruleSetType"] = ""
         results = validate_managed_rules([rule])
-        assert "AZ701" in _ids(results)
+        assert_lint(results, "AZ701")
 
     def test_non_string_rule_set_type(self):
         rule = _managed_rule_set()
         rule["ruleSetType"] = 123
         results = validate_managed_rules([rule])
-        assert "AZ701" in _ids(results)
+        assert_lint(results, "AZ701")
         # Should be ERROR severity
         az701 = [r for r in results if r.rule_id == "AZ701"]
         assert az701[0].severity.name == "ERROR"
@@ -862,14 +858,14 @@ class TestValidateRuleSetAction:
         set_waf_type("front_door")
         rule = _managed_rule_set(ruleSetAction="Block")
         results = validate_managed_rules([rule])
-        assert "AZ702" not in _ids(results)
+        assert_no_lint(results, "AZ702")
 
     def test_rule_set_action_on_app_gateway(self):
         """ruleSetAction is FD-only; should warn on AG (AZ705)."""
         set_waf_type("app_gateway")
         rule = _managed_rule_set(ruleSetAction="Block")
         results = validate_managed_rules([rule])
-        assert "AZ705" in _ids(results)
+        assert_lint(results, "AZ705")
         az705 = [r for r in results if r.rule_id == "AZ705"]
         assert az705[0].severity.name == "WARNING"
 
@@ -877,14 +873,14 @@ class TestValidateRuleSetAction:
         set_waf_type("front_door")
         rule = _managed_rule_set(ruleSetAction="InvalidAction")
         results = validate_managed_rules([rule])
-        assert "AZ702" in _ids(results)
+        assert_lint(results, "AZ702")
 
     def test_missing_rule_set_action_ok(self):
         """ruleSetAction is optional -- missing should not produce errors."""
         set_waf_type("front_door")
         rule = _managed_rule_set()
         results = validate_managed_rules([rule])
-        assert "AZ702" not in _ids(results)
+        assert_no_lint(results, "AZ702")
 
 
 class TestValidateManagedEnabledState:
@@ -905,7 +901,7 @@ class TestValidateManagedEnabledState:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ703" in _ids(results)
+        assert_lint(results, "AZ703")
 
     def test_valid_enabled_state_in_override(self):
         rule = _managed_rule_set(
@@ -922,7 +918,7 @@ class TestValidateManagedEnabledState:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ703" not in _ids(results)
+        assert_no_lint(results, "AZ703")
 
     def test_missing_enabled_state_ok(self):
         """enabledState is optional in overrides."""
@@ -939,7 +935,7 @@ class TestValidateManagedEnabledState:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ703" not in _ids(results)
+        assert_no_lint(results, "AZ703")
 
 
 class TestValidateRuleGroupOverrides:
@@ -948,26 +944,26 @@ class TestValidateRuleGroupOverrides:
     def test_non_list_overrides(self):
         rule = _managed_rule_set(ruleGroupOverrides="bad")
         results = validate_managed_rules([rule])
-        assert "AZ704" in _ids(results)
+        assert_lint(results, "AZ704")
 
     def test_non_dict_entry(self):
         rule = _managed_rule_set(ruleGroupOverrides=["bad"])
         results = validate_managed_rules([rule])
-        assert "AZ704" in _ids(results)
+        assert_lint(results, "AZ704")
 
     def test_missing_rule_group_name(self):
         rule = _managed_rule_set(
             ruleGroupOverrides=[{"rules": []}],
         )
         results = validate_managed_rules([rule])
-        assert "AZ704" in _ids(results)
+        assert_lint(results, "AZ704")
 
     def test_empty_rule_group_name(self):
         rule = _managed_rule_set(
             ruleGroupOverrides=[{"ruleGroupName": "", "rules": []}],
         )
         results = validate_managed_rules([rule])
-        assert "AZ704" in _ids(results)
+        assert_lint(results, "AZ704")
 
     def test_valid_rule_group_overrides(self):
         rule = _managed_rule_set(
@@ -981,7 +977,7 @@ class TestValidateRuleGroupOverrides:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ704" not in _ids(results)
+        assert_no_lint(results, "AZ704")
 
     def test_non_list_rules_in_group(self):
         rule = _managed_rule_set(
@@ -990,13 +986,13 @@ class TestValidateRuleGroupOverrides:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ704" in _ids(results)
+        assert_lint(results, "AZ704")
 
     def test_none_overrides_ok(self):
         """ruleGroupOverrides is optional."""
         rule = _managed_rule_set()
         results = validate_managed_rules([rule])
-        assert "AZ704" not in _ids(results)
+        assert_no_lint(results, "AZ704")
 
 
 class TestValidateRuleOverrideRuleId:
@@ -1014,7 +1010,7 @@ class TestValidateRuleOverrideRuleId:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ706" in _ids(results)
+        assert_lint(results, "AZ706")
 
     def test_empty_rule_id(self):
         rule = _managed_rule_set(
@@ -1028,7 +1024,7 @@ class TestValidateRuleOverrideRuleId:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ706" in _ids(results)
+        assert_lint(results, "AZ706")
 
     def test_non_string_rule_id(self):
         rule = _managed_rule_set(
@@ -1042,7 +1038,7 @@ class TestValidateRuleOverrideRuleId:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ706" in _ids(results)
+        assert_lint(results, "AZ706")
 
     def test_valid_rule_id(self):
         rule = _managed_rule_set(
@@ -1056,7 +1052,7 @@ class TestValidateRuleOverrideRuleId:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ706" not in _ids(results)
+        assert_no_lint(results, "AZ706")
 
 
 class TestValidateRuleOverrideAction:
@@ -1074,7 +1070,7 @@ class TestValidateRuleOverrideAction:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ707" in _ids(results)
+        assert_lint(results, "AZ707")
         az707 = [r for r in results if r.rule_id == "AZ707"]
         assert az707[0].severity.name == "ERROR"
 
@@ -1090,7 +1086,7 @@ class TestValidateRuleOverrideAction:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ707" in _ids(results)
+        assert_lint(results, "AZ707")
 
     def test_valid_action_in_override(self):
         rule = _managed_rule_set(
@@ -1104,7 +1100,7 @@ class TestValidateRuleOverrideAction:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ707" not in _ids(results)
+        assert_no_lint(results, "AZ707")
 
     def test_missing_action_ok(self):
         """action is optional in rule overrides."""
@@ -1119,7 +1115,7 @@ class TestValidateRuleOverrideAction:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ707" not in _ids(results)
+        assert_no_lint(results, "AZ707")
 
     def test_none_action_valid(self):
         """'None' means use the default rule set action (valid for AG)."""
@@ -1134,7 +1130,7 @@ class TestValidateRuleOverrideAction:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ707" not in _ids(results)
+        assert_no_lint(results, "AZ707")
 
     def test_jschallenge_action_valid(self):
         """JSChallenge is valid for FD managed rule overrides."""
@@ -1149,7 +1145,7 @@ class TestValidateRuleOverrideAction:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ707" not in _ids(results)
+        assert_no_lint(results, "AZ707")
 
 
 class TestValidateOverrideActionWafType:
@@ -1168,7 +1164,7 @@ class TestValidateOverrideActionWafType:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ708" in _ids(results)
+        assert_lint(results, "AZ708")
         az708 = [r for r in results if r.rule_id == "AZ708"]
         assert az708[0].severity.name == "WARNING"
         set_waf_type("")
@@ -1186,7 +1182,7 @@ class TestValidateOverrideActionWafType:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ708" not in _ids(results)
+        assert_no_lint(results, "AZ708")
         set_waf_type("")
 
     def test_block_override_action_no_warn_on_ag(self):
@@ -1203,5 +1199,5 @@ class TestValidateOverrideActionWafType:
             ],
         )
         results = validate_managed_rules([rule])
-        assert "AZ708" not in _ids(results)
+        assert_no_lint(results, "AZ708")
         set_waf_type("")
