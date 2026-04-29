@@ -1244,6 +1244,26 @@ class TestZonePlans:
         p.resolve_zone_id("my-policy")
         assert p.zone_plans == {"my-policy": "premium"}
 
+    def test_zone_plans_returns_defensive_copy(self):
+        """``zone_plans`` returns a snapshot — caller mutation must not
+        corrupt provider state. Matches the contract used by Google and Bunny.
+        """
+        client = MagicMock()
+        p = _make_provider(client=client)
+        client.policies.get.return_value = {
+            "name": "my-policy",
+            "sku": {"name": "Premium_AzureFrontDoor"},
+            "custom_rules": {"rules": []},
+        }
+        p.resolve_zone_id("my-policy")
+
+        snapshot = p.zone_plans
+        snapshot["my-policy"] = "free"
+        snapshot["sneaky"] = "premium"
+
+        assert p.zone_plans["my-policy"] == "premium"
+        assert "sneaky" not in p.zone_plans
+
     def test_standard_front_door(self):
         client = MagicMock()
         p = _make_provider(client=client)

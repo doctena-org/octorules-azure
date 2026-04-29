@@ -102,8 +102,8 @@ class TestBuildParser:
 
 class TestCmdLint:
     def test_clean_rules_exit_0(self, lint_config):
-        # Documentation ranges in clean-policy.yaml still trigger AZ319 INFO —
-        # INFO severity doesn't fail the exit code without --exit-code.
+        # Documentation ranges in clean-policy.yaml trigger AZ319 (WARNING),
+        # but without --exit-code, warnings don't fail the exit code.
         rc = cmd_lint(lint_config, ["clean-policy"])
         assert rc == 0
 

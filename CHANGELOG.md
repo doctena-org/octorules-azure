@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.10] - 2026-04-29
+
+### Added
+- **AZ339** (cross_rule, WARNING): overlapping CIDR across rules in the
+  same phase. Detects silent rule shadowing — when one rule's IPMatch
+  contains another's, the broader rule wins by priority and the
+  narrower one never fires. Uses an `O(n log n)` sweep-line over
+  `IPMatch` conditions grouped by `(matchVariable, ip_version)`.
+  Mirrors CF478 (Cloudflare), WA164 (AWS), GA305 (Google), BN307
+  (Bunny). Covered by 15 dedicated tests.
+
+### Changed
+- **AZ319 severity bumped from INFO to WARNING** to align with peer
+  reserved/bogon-IP rules (CF530, WA162, GA320, BN305 — all WARNING).
+  No detection-logic change; only the severity.
+- `FrontDoorAdapter.put_policy` caps the long-running-operation
+  poller at 5 minutes. Previously the SDK default applied (infinite
+  wait), so a network partition during async LRO polling could hang
+  `octorules sync` indefinitely.
+
+### Fixed
+- `AzureWafProvider.zone_plans` now returns a snapshot copy of the
+  internal mapping. Callers can no longer mutate the provider's
+  cached SKU-tier state by accident (matches Cloudflare/Google/Bunny
+  contracts).
+
 ## [0.1.8] - 2026-04-18
 
 ### Changed

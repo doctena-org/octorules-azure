@@ -365,6 +365,23 @@ class TestFrontDoorPolicyOps:
         # Original should be unchanged
         assert policy["custom_rules"]["rules"] == [{"name": "old"}]
 
+    def test_put_policy_caps_lro_poller_at_300s(self):
+        """``poller.result()`` is called with timeout=300.
+
+        Without a timeout, the Azure SDK waits forever — a network
+        partition during async LRO polling would hang the caller.
+        """
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        poller = MagicMock()
+        client.policies.begin_create_or_update.return_value = poller
+        poller.result.return_value = {"name": "p"}
+
+        self.adapter.put_policy(client, "rg", "p", {"name": "p"})
+
+        poller.result.assert_called_once_with(timeout=300)
+
 
 class TestAppGatewayPolicyOps:
     def setup_method(self):

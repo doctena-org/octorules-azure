@@ -199,8 +199,12 @@ class AzureWafProvider:
 
     @property
     def zone_plans(self) -> dict[str, str]:
-        """Zone name -> normalized SKU tier, populated during resolve_zone_id."""
-        return self._zone_plans
+        """Zone name -> normalized SKU tier, populated during resolve_zone_id.
+
+        Returns a snapshot copy — callers cannot mutate the provider's
+        internal state. Matches the contract used by Google and Bunny.
+        """
+        return dict(self._zone_plans)
 
     # -- Internal helpers --
 

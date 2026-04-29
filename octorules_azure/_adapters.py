@@ -95,10 +95,16 @@ class FrontDoorAdapter:
         policy = client.policies.get(resource_group, policy_name)
         return to_plain_dict(policy)
 
+    # Cap async LRO polling at 5 minutes. Front Door policy updates
+    # typically complete in 30-60s but can stretch under regional load.
+    # The bound prevents a network partition from hanging the caller
+    # indefinitely (the SDK default is infinite wait).
+    _LRO_TIMEOUT_SECONDS = 300
+
     def put_policy(self, client: Any, resource_group: str, policy_name: str, policy: Any) -> dict:
         """Write a Front Door WAF policy (full PUT, async LRO)."""
         poller = client.policies.begin_create_or_update(resource_group, policy_name, policy)
-        result = poller.result()
+        result = poller.result(timeout=self._LRO_TIMEOUT_SECONDS)
         return to_plain_dict(result)
 
     def extract_custom_rules(self, policy: dict) -> list[dict]:

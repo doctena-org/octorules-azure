@@ -1,6 +1,6 @@
 # Lint Rule Reference
 
-`octorules lint` performs offline static analysis of your Azure WAF rules files. **73 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
+`octorules lint` performs offline static analysis of your Azure WAF rules files. **74 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
@@ -68,7 +68,7 @@ azure_waf_custom_rules:
 | AZ316 | WARNING | match | Empty selector |
 | AZ317 | ERROR | match | Invalid regex pattern |
 | AZ318 | WARNING | match | Invalid CIDR in IPMatch |
-| AZ319 | INFO | match | Private/reserved IP in IPMatch |
+| AZ319 | WARNING | match | Private/reserved IP in IPMatch |
 | AZ320 | WARNING | match | Unknown GeoMatch country code |
 | AZ321 | WARNING | match | Selector on non-selector variable |
 | AZ322 | WARNING | match | Catch-all CIDR |
@@ -87,6 +87,7 @@ azure_waf_custom_rules:
 | AZ336 | WARNING | match | Duplicate variable+operator in rule |
 | AZ337 | WARNING | match | CIDR has host bits set |
 | AZ338 | WARNING | match | Redundant CIDR in matchValue (already covered by a broader range) |
+| AZ339 | WARNING | match | Overlapping CIDR across rules in same phase |
 | AZ340 | WARNING | match | Catch-all rule |
 | AZ341 | WARNING | match | Unreachable rule after catch-all |
 | AZ400 | ERROR | rate_limit | Invalid rateLimitDurationInMinutes |
@@ -597,9 +598,9 @@ Warns when an `IPMatch` value is not a valid IPv4/IPv6 address or CIDR.
 
 ### AZ319 -- Private/reserved IP range in IPMatch
 
-**Severity:** INFO
+**Severity:** WARNING
 
-Info-level notice when an IPMatch value falls entirely within a private or
+Fires when an IPMatch value falls entirely within a private or
 reserved IP range (RFC 1918, loopback, link-local, RFC 6598, documentation,
 benchmarking, multicast, etc.). Such addresses are typically not seen in
 public WAF traffic and may indicate a configuration meant for a different
@@ -938,6 +939,47 @@ matchConditions:
     matchValue:
       - "10.0.0.0/8"
 ```
+
+### AZ339 -- Overlapping CIDR across rules in same phase
+
+**Severity:** WARNING
+
+Two rules in the same phase have overlapping `IPMatch` CIDRs on the same
+`matchVariable`. Because Azure WAF evaluates rules in priority order, the
+broader rule fires first and the narrower rule is effectively unreachable
+for any address in the overlap — silent rule shadowing.
+
+Within-rule redundancy (the same rule containing both CIDRs) is AZ338's
+domain and is not double-flagged here. Catch-all entries (`0.0.0.0/0` /
+`::/0`) are AZ322's domain.
+
+Mirrors CF478 (Cloudflare), WA164 (AWS), GA305 (Google), BN307 (Bunny).
+Uses an `O(n log n)` sweep-line, so 1,000-rule policies lint in well
+under a second.
+
+**Triggers on:**
+
+```yaml
+customRules:
+  - name: blockKnownBad
+    priority: 100
+    action: Block
+    matchConditions:
+      - matchVariable: RemoteAddr
+        operator: IPMatch
+        matchValue: ["10.0.0.0/8"]      # broader
+  - name: blockSpecificSubnet
+    priority: 200
+    action: Block
+    matchConditions:
+      - matchVariable: RemoteAddr
+        operator: IPMatch
+        matchValue: ["10.1.2.0/24"]     # <-- never reached: shadowed by priority-100 rule
+```
+
+**Fix:** Remove the narrower rule (the broader one already covers it),
+reorder priorities, or split the broader rule's CIDR list so the two
+ranges don't overlap.
 
 ### AZ340 -- Catch-all rule matches all traffic
 

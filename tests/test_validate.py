@@ -16,9 +16,11 @@ class TestValidRules:
         assert validate_rules(rules) == []
 
     def test_multiple_valid_rules(self):
+        # Distinct matchValues so AZ339 (cross-rule CIDR overlap) doesn't
+        # fire — make_normalised_rule defaults to a single shared CIDR.
         rules = [
-            make_normalised_rule(ref="R1", priority=1),
-            make_normalised_rule(ref="R2", priority=2, action="Allow"),
+            make_normalised_rule(ref="R1", priority=1, match_value=["104.16.0.0/12"]),
+            make_normalised_rule(ref="R2", priority=2, action="Allow", match_value=["8.8.8.8/32"]),
         ]
         assert validate_rules(rules) == []
 
@@ -1537,6 +1539,184 @@ class TestRedundantCIDRs:
         assert_lint(results, "AZ338")
         # AZ337 also fires for the host-bits issue
         assert_lint(results, "AZ337")
+
+
+# ---------------------------------------------------------------------------
+# AZ339: Cross-rule CIDR overlap (sweep-line O(n log n))
+# ---------------------------------------------------------------------------
+class TestAZ339CrossRuleOverlap:
+    """Detect overlapping CIDRs across rules in the same phase.
+
+    Mirrors CF478, WA164, GA305, BN307. Azure-specific because the data
+    model is inline IP arrays per rule (no shared list/IPSet concept).
+    """
+
+    @staticmethod
+    def _ip_match_rule(ref: str, priority: int, cidrs: list[str], action: str = "Block") -> dict:
+        """Build a normalised rule with one IPMatch condition on RemoteAddr."""
+        return make_normalised_rule(
+            ref=ref,
+            priority=priority,
+            action=action,
+            operator="IPMatch",
+            match_value=cidrs,
+            match_variable="RemoteAddr",
+        )
+
+    def test_ipv4_containment_across_rules(self):
+        """Narrow CIDR contained in broader CIDR from another rule fires AZ339."""
+        rules = [
+            self._ip_match_rule("BlockAll10", 10, ["10.0.0.0/8"]),
+            self._ip_match_rule("BlockBranch", 20, ["10.1.0.0/16"]),
+        ]
+        assert_lint(validate_rules(rules), "AZ339")
+
+    def test_ipv4_disjoint_no_az339(self):
+        """Disjoint CIDRs across rules don't fire."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["10.0.0.0/8"]),
+            self._ip_match_rule("R2", 20, ["192.168.0.0/16"]),
+        ]
+        assert_no_lint(validate_rules(rules), "AZ339")
+
+    def test_ipv4_adjacent_no_az339(self):
+        """Adjacent /9s (10.0.0.0/9 + 10.128.0.0/9) are not overlapping."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["10.0.0.0/9"]),
+            self._ip_match_rule("R2", 20, ["10.128.0.0/9"]),
+        ]
+        assert_no_lint(validate_rules(rules), "AZ339")
+
+    def test_ipv6_containment_across_rules(self):
+        """IPv6 containment is detected the same as IPv4."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["2001:db8::/32"]),
+            self._ip_match_rule("R2", 20, ["2001:db8:1234::/48"]),
+        ]
+        assert_lint(validate_rules(rules), "AZ339")
+
+    def test_mixed_family_no_cross_overlap(self):
+        """IPv4 from one rule and IPv6 from another don't cross-overlap."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["10.0.0.0/8"]),
+            self._ip_match_rule("R2", 20, ["2001:db8::/32"]),
+        ]
+        assert_no_lint(validate_rules(rules), "AZ339")
+
+    def test_different_match_variables_no_overlap(self):
+        """Same CIDR on different matchVariables (RemoteAddr vs SocketAddr)
+        is not a cross-rule overlap — they're distinct enforcement points."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["10.0.0.0/8"]),
+            make_normalised_rule(
+                ref="R2",
+                priority=20,
+                operator="IPMatch",
+                match_value=["10.1.0.0/16"],
+                match_variable="SocketAddr",
+            ),
+        ]
+        assert_no_lint(validate_rules(rules), "AZ339")
+
+    def test_catch_all_skipped_in_az339(self):
+        """0.0.0.0/0 in one rule + narrow CIDR in another doesn't fire AZ339.
+        AZ322 already flags the catch-all separately."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["0.0.0.0/0"]),
+            self._ip_match_rule("R2", 20, ["10.0.0.0/8"]),
+        ]
+        results = validate_rules(rules)
+        assert_no_lint(results, "AZ339")
+        # AZ322 still surfaces the catch-all.
+        assert_lint(results, "AZ322")
+
+    def test_ipv6_catch_all_skipped(self):
+        """Same skip applies to ::/0 vs narrower IPv6."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["::/0"]),
+            self._ip_match_rule("R2", 20, ["2001:db8::/32"]),
+        ]
+        results = validate_rules(rules)
+        assert_no_lint(results, "AZ339")
+
+    def test_within_rule_overlap_uses_az338_not_az339(self):
+        """Overlap inside a single rule's matchValue is AZ338's domain;
+        AZ339 only flags cross-rule overlaps to avoid double-reporting."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["10.0.0.0/8", "10.1.0.0/16"]),
+        ]
+        results = validate_rules(rules)
+        assert_lint(results, "AZ338")
+        assert_no_lint(results, "AZ339")
+
+    def test_message_names_both_rules(self):
+        """The finding identifies both contributing rules so users can act."""
+        rules = [
+            self._ip_match_rule("BroadBlock", 10, ["10.0.0.0/8"]),
+            self._ip_match_rule("NarrowBlock", 20, ["10.5.0.0/16"]),
+        ]
+        results = validate_rules(rules)
+        az339 = [r for r in results if r.rule_id == "AZ339"]
+        assert len(az339) == 1
+        assert "BroadBlock" in az339[0].message
+        assert "NarrowBlock" in az339[0].message
+        assert az339[0].ref == "NarrowBlock"  # narrower rule owns the finding
+
+    def test_three_nested_rules(self):
+        """A chain of three rules with progressively narrower CIDRs produces
+        N-1 findings (each contained CIDR reported against its immediate parent)."""
+        rules = [
+            self._ip_match_rule("R8", 10, ["10.0.0.0/8"]),
+            self._ip_match_rule("R16", 20, ["10.1.0.0/16"]),
+            self._ip_match_rule("R24", 30, ["10.1.0.0/24"]),
+        ]
+        results = validate_rules(rules)
+        az339 = [r for r in results if r.rule_id == "AZ339"]
+        # Two findings: /16 contained in /8, /24 contained in /16.
+        assert len(az339) == 2
+
+    def test_duplicate_cidr_across_rules_is_flagged(self):
+        """Two rules with the exact same CIDR — flagged as duplicate cross-rule."""
+        rules = [
+            self._ip_match_rule("R1", 10, ["10.0.0.0/8"]),
+            self._ip_match_rule("R2", 20, ["10.0.0.0/8"]),
+        ]
+        results = validate_rules(rules)
+        az339 = [r for r in results if r.rule_id == "AZ339"]
+        assert len(az339) == 1
+        assert "Duplicate CIDR" in az339[0].message
+
+    def test_single_rule_no_az339(self):
+        """One rule alone can't produce a cross-rule overlap."""
+        rules = [self._ip_match_rule("R1", 10, ["10.0.0.0/8", "10.1.0.0/16"])]
+        assert_no_lint(validate_rules(rules), "AZ339")
+
+    def test_non_ipmatch_operators_skipped(self):
+        """Equal/Contains/RegEx etc. don't carry CIDRs — AZ339 ignores them."""
+        rule_a = self._ip_match_rule("R1", 10, ["10.0.0.0/8"])
+        rule_b = make_normalised_rule(
+            ref="R2",
+            priority=20,
+            operator="Equal",
+            match_value=["10.1.0.0/16"],  # not a CIDR for Equal, but harmless
+            match_variable="RequestUri",
+        )
+        rules = [rule_a, rule_b]
+        assert_no_lint(validate_rules(rules), "AZ339")
+
+    def test_sweep_line_fast_on_large_input(self):
+        """Lock in O(n log n): 500 disjoint /32s across 500 rules lints quickly."""
+        import time
+
+        rules = [
+            self._ip_match_rule(f"R{i}", i + 1, [f"203.0.{i // 256}.{i % 256}/32"])
+            for i in range(500)
+        ]
+        start = time.monotonic()
+        results = validate_rules(rules)
+        elapsed = time.monotonic() - start
+        assert elapsed < 1.0, f"AZ339 sweep-line too slow: {elapsed:.2f}s for 500 rules"
+        assert [r for r in results if r.rule_id == "AZ339"] == []
 
 
 # ---------------------------------------------------------------------------

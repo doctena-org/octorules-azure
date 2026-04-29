@@ -62,6 +62,7 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ336",
         "AZ337",
         "AZ338",
+        "AZ339",
         "AZ340",
         "AZ341",
         "AZ400",
@@ -952,12 +953,15 @@ def _check_cidr_catch_all(
 def _check_cidr_private(
     val: str, results: list[LintResult], phase: str, ref: str, prefix: str
 ) -> None:
-    """AZ319: Info when a private/reserved IP range is used in IPMatch.
+    """AZ319: Warn when a private/reserved IP range is used in IPMatch.
 
     Uses strict containment (``val`` is a subset of a reserved range) —
-    aligned with the other four providers in v0.1.8.  The catch-all
+    aligned with the other four providers.  The catch-all
     ``0.0.0.0/0`` / ``::/0`` case is handled separately by AZ322 so we
     don't double-flag it here.
+
+    Severity is WARNING to match the peer rules WA162, GA320, CF530,
+    BN305 — all reserved/bogon IP detectors should agree.
     """
     desc = is_reserved(val)
     if desc is None:
@@ -965,7 +969,7 @@ def _check_cidr_private(
     results.append(
         _result(
             "AZ319",
-            Severity.INFO,
+            Severity.WARNING,
             f"{prefix}: {val} is a {desc} range (typically not seen in public WAF traffic)",
             phase,
             ref=ref,
@@ -1481,6 +1485,115 @@ def _check_allow_bypasses_managed(rules: list[dict], results: list[LintResult], 
             )
 
 
+def _check_cross_rule_cidr_overlaps(
+    rules: list[dict], results: list[LintResult], phase: str
+) -> None:
+    """AZ339: Detect CIDR overlap across rules in the same phase.
+
+    Azure WAF rules use inline IP arrays per ``IPMatch`` condition.  When two
+    rules in the same policy reference overlapping CIDRs on the same
+    ``matchVariable``, the broader rule shadows the narrower one (rules are
+    evaluated by priority).  Without this check, that shadowing is silent.
+
+    Algorithm: collect every CIDR from ``IPMatch`` conditions across all
+    rules, group by ``(matchVariable, ip_version)``, sweep-line in
+    ``O(n log n)``.  Catch-all entries (``0.0.0.0/0`` / ``::/0``) are
+    excluded — those are AZ322's domain.  Each contained CIDR is reported
+    once against the rule whose broader CIDR contains it.
+
+    Mirrors CF478 (Cloudflare), WA164 (AWS), GA305 (Google), BN307 (Bunny).
+    """
+    # Collect: (rule_ref, match_variable, cidr_str, parsed_network)
+    entries: list[tuple[str, str, str, ipaddress.IPv4Network | ipaddress.IPv6Network]] = []
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        ref = str(rule.get("ref", ""))
+        for cond in rule.get("matchConditions", []) or []:
+            if not isinstance(cond, dict):
+                continue
+            if cond.get("operator") != "IPMatch":
+                continue
+            mvar = str(cond.get("matchVariable", ""))
+            for val in cond.get("matchValue", []) or []:
+                if not isinstance(val, str):
+                    continue
+                if val in _CATCH_ALL_CIDRS:
+                    continue  # AZ322's domain
+                try:
+                    if "/" in val:
+                        net = ipaddress.ip_network(val, strict=False)
+                    else:
+                        suffix = "/32" if ":" not in val else "/128"
+                        net = ipaddress.ip_network(val + suffix, strict=False)
+                except ValueError:
+                    continue  # AZ318 handles invalid CIDRs
+                entries.append((ref, mvar, val, net))
+
+    if len(entries) < 2:
+        return
+
+    # Group by (match_variable, ip_version). IPv4 and IPv6 can't overlap;
+    # neither can different match variables (RemoteAddr vs SocketAddr are
+    # distinct enforcement points).
+    from collections import defaultdict
+
+    groups: dict[
+        tuple[str, int],
+        list[tuple[str, str, ipaddress.IPv4Network | ipaddress.IPv6Network]],
+    ] = defaultdict(list)
+    for ref, mvar, cidr, net in entries:
+        groups[(mvar, net.version)].append((ref, cidr, net))
+
+    seen_pairs: set[tuple[str, str, str, str]] = set()
+    for items in groups.values():
+        if len(items) < 2:
+            continue
+        # Sort: broadest first when network addresses are equal — that
+        # places the containing CIDR on the active stack before any
+        # contained ones.
+        items_sorted = sorted(items, key=lambda x: (int(x[2].network_address), x[2].prefixlen))
+        active: list[tuple[str, str, ipaddress.IPv4Network | ipaddress.IPv6Network]] = []
+        for ref, cidr, net in items_sorted:
+            while active and int(active[-1][2].broadcast_address) < int(net.network_address):
+                active.pop()
+            if active:
+                parent_ref, parent_cidr, parent_net = active[-1]
+                # Same rule contributing both entries is AZ338's domain
+                # (within-rule redundancy). Skip here to avoid double-flag.
+                if parent_ref != ref:
+                    pair_key = (parent_ref, parent_cidr, ref, cidr)
+                    if pair_key not in seen_pairs:
+                        seen_pairs.add(pair_key)
+                        if net == parent_net:
+                            msg = (
+                                f"Duplicate CIDR across rules: {cidr!r} in"
+                                f" {ref!r} also appears in {parent_ref!r}"
+                            )
+                        else:
+                            msg = (
+                                f"Overlapping CIDR across rules: {cidr!r} in"
+                                f" {ref!r} is contained in {parent_cidr!r} from"
+                                f" {parent_ref!r}"
+                            )
+                        results.append(
+                            _result(
+                                "AZ339",
+                                Severity.WARNING,
+                                msg,
+                                phase,
+                                ref=ref,
+                                field="matchConditions.matchValue",
+                                suggestion=(
+                                    "Remove the redundant rule, or reorder so"
+                                    f" {ref!r} (narrower) takes priority over"
+                                    f" {parent_ref!r}"
+                                ),
+                            )
+                        )
+            active.append((ref, cidr, net))
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -1521,6 +1634,7 @@ def validate_rules(rules: list[dict], *, phase: str = "") -> list[LintResult]:
     _check_catch_all_and_dead_rules(rules, results, phase)
     _check_all_disabled(rules, results, phase)
     _check_allow_bypasses_managed(rules, results, phase)
+    _check_cross_rule_cidr_overlaps(rules, results, phase)
     # Note: AZ500 (regex limit) and AZ501 (total rule count) are checked
     # in the linter plugin as cross-phase checks, since Azure limits are
     # per-policy not per-phase.

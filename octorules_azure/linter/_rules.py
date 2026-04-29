@@ -41,7 +41,7 @@ AZ315 = RuleMeta("AZ315", "match", "Selector required for variable", Severity.ER
 AZ316 = RuleMeta("AZ316", "match", "Empty selector", Severity.WARNING)
 AZ317 = RuleMeta("AZ317", "match", "Invalid regex pattern", Severity.ERROR)
 AZ318 = RuleMeta("AZ318", "match", "Invalid CIDR in IPMatch", Severity.WARNING)
-AZ319 = RuleMeta("AZ319", "match", "Private/reserved IP range in IPMatch", Severity.INFO)
+AZ319 = RuleMeta("AZ319", "match", "Private/reserved IP range in IPMatch", Severity.WARNING)
 AZ320 = RuleMeta("AZ320", "match", "GeoMatch with unknown country code", Severity.WARNING)
 AZ321 = RuleMeta("AZ321", "match", "Selector on non-selector variable", Severity.WARNING)
 AZ322 = RuleMeta("AZ322", "match", "Catch-all CIDR matches all traffic", Severity.WARNING)
@@ -65,6 +65,12 @@ AZ336 = RuleMeta(
 )
 AZ337 = RuleMeta("AZ337", "match", "CIDR has host bits set", Severity.WARNING)
 AZ338 = RuleMeta("AZ338", "match", "Redundant CIDR in matchValue", Severity.WARNING)
+AZ339 = RuleMeta(
+    "AZ339",
+    "match",
+    "Overlapping CIDR across rules in same phase",
+    Severity.WARNING,
+)
 AZ340 = RuleMeta("AZ340", "match", "Catch-all rule matches all traffic", Severity.WARNING)
 AZ341 = RuleMeta("AZ341", "match", "Rule is unreachable after catch-all", Severity.WARNING)
 
