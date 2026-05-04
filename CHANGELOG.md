@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-05-04
+
+All new rules apply to both Front Door and Application Gateway.
+
+### Added
+- **AZ027** (WARNING / INFO): Leading or trailing whitespace in structural fields (`ref`, `action`, `ruleType`); INFO for `selector`.
+- **AZ342** (WARNING): Overly-permissive regex on `RegEx` operator (e.g., `.`, `.*`, `^.+$`).
+- **AZ343** (INFO): Fully-anchored literal regex (`^foo$`) — suggests `Equal` operator instead.
+- **AZ344** (WARNING): HTTP method in `matchValue` should be uppercase.
+- **AZ345** (INFO): Header/cookie selector should be lowercase.
+
 ## [0.1.10] - 2026-04-29
 
 ### Added

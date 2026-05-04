@@ -16,6 +16,9 @@ AZ021 = RuleMeta("AZ021", "structure", "negateCondition must be a boolean", Seve
 AZ022 = RuleMeta("AZ022", "structure", "Duplicate ref within phase", Severity.ERROR)
 AZ023 = RuleMeta("AZ023", "structure", "Rule entry is not a dict", Severity.ERROR)
 AZ024 = RuleMeta("AZ024", "structure", "Phase value is not a list", Severity.ERROR)
+AZ027 = RuleMeta(
+    "AZ027", "structure", "Leading/trailing whitespace in structural field", Severity.WARNING
+)
 
 # --- AZ1xx: Priority checks ---
 AZ100 = RuleMeta("AZ100", "priority", "Priority must be a positive integer", Severity.ERROR)
@@ -73,6 +76,12 @@ AZ339 = RuleMeta(
 )
 AZ340 = RuleMeta("AZ340", "match", "Catch-all rule matches all traffic", Severity.WARNING)
 AZ341 = RuleMeta("AZ341", "match", "Rule is unreachable after catch-all", Severity.WARNING)
+AZ342 = RuleMeta("AZ342", "match", "Overly-permissive regex on RegEx operator", Severity.WARNING)
+AZ343 = RuleMeta(
+    "AZ343", "match", "Fully-anchored literal regex; use Equal operator instead", Severity.INFO
+)
+AZ344 = RuleMeta("AZ344", "match", "HTTP method should be uppercase", Severity.WARNING)
+AZ345 = RuleMeta("AZ345", "match", "Header/cookie selector should be lowercase", Severity.INFO)
 
 # --- AZ4xx: Rate-limit checks ---
 AZ400 = RuleMeta("AZ400", "rate_limit", "rateLimitDurationInMinutes invalid", Severity.ERROR)

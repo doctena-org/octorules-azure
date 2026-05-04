@@ -26,6 +26,7 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ021",
         "AZ022",
         "AZ023",
+        "AZ027",
         "AZ100",
         "AZ101",
         "AZ102",
@@ -65,6 +66,10 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ339",
         "AZ340",
         "AZ341",
+        "AZ342",
+        "AZ343",
+        "AZ344",
+        "AZ345",
         "AZ400",
         "AZ401",
         "AZ402",
@@ -244,6 +249,33 @@ _CONFLICTING_TRANSFORMS = frozenset(
 # patterns over 256 chars are likely problematic and indicate configuration errors).
 _MAX_REGEX_PATTERN_LEN = 256
 
+# Regexes that match every input (overly-permissive patterns).
+_OVERLY_PERMISSIVE_REGEX = frozenset(
+    {
+        "",
+        ".",
+        ".*",
+        "^.*",
+        ".*$",
+        "^.*$",
+        ".+",
+        "^.+",
+        ".+$",
+        "^.+$",
+        "^",
+        "$",
+        "|",
+    }
+)
+
+# Conservative regex for fully-anchored literal patterns (e.g., "^literal$").
+# Matches only literal chars, escaped dots/slashes, and anchors.
+_FULLY_ANCHORED_LITERAL_REGEX = re.compile(
+    r"^\^"  # start anchor
+    r"((?:[a-zA-Z0-9_/-]|\\\.|\\/)+)"  # literal-only payload (escaped . or / OK)
+    r"\$$"  # end anchor
+)
+
 # Valid top-level rule fields in canonical form.
 _VALID_RULE_FIELDS = frozenset(
     {
@@ -264,12 +296,13 @@ _VALID_RULE_FIELDS = frozenset(
 # Individual check functions
 # ---------------------------------------------------------------------------
 def _check_ref(rule: dict, results: list[LintResult], phase: str) -> str:
-    """AZ001, AZ010, AZ022: Validate ref field."""
+    """AZ001, AZ010, AZ022, AZ027: Validate ref field."""
     ref = rule.get("ref")
     if ref is None or ref == "":
         results.append(_result("AZ001", Severity.ERROR, "Rule missing 'ref'", phase, field="ref"))
         return ""
     ref_str = str(ref)
+    _check_whitespace_structural_field("ref", ref_str, results, phase, "")
     if len(ref_str) > _MAX_NAME_LEN:
         results.append(
             _result(
@@ -294,6 +327,24 @@ def _check_ref(rule: dict, results: list[LintResult], phase: str) -> str:
             )
         )
     return ref_str
+
+
+def _check_whitespace_structural_field(
+    field_name: str, field_value: object, results: list[LintResult], phase: str, ref: str
+) -> None:
+    """AZ027: Check for leading/trailing whitespace in structural fields."""
+    if isinstance(field_value, str) and (field_value != field_value.strip()):
+        results.append(
+            _result(
+                "AZ027",
+                Severity.WARNING,
+                f"{field_name}: has leading or trailing whitespace",
+                phase,
+                ref=ref,
+                field=field_name,
+                suggestion=f"Remove whitespace: {field_value.strip()!r}",
+            )
+        )
 
 
 def _check_priority(
@@ -337,7 +388,7 @@ def _check_priority(
 
 
 def _check_action(rule: dict, results: list[LintResult], phase: str, ref: str) -> None:
-    """AZ003, AZ200: Validate action field."""
+    """AZ003, AZ027, AZ200: Validate action field."""
     action = rule.get("action")
     if action is None or action == "":
         results.append(_result("AZ003", Severity.ERROR, "Rule missing 'action'", phase, ref=ref))
@@ -354,6 +405,7 @@ def _check_action(rule: dict, results: list[LintResult], phase: str, ref: str) -
             )
         )
         return
+    _check_whitespace_structural_field("action", action, results, phase, ref)
     if action not in _VALID_ACTIONS:
         results.append(
             _result(
@@ -522,7 +574,7 @@ def _check_single_condition(
                 )
             )
 
-    # AZ315/AZ316: selector
+    # AZ315/AZ316/AZ027: selector
     if isinstance(variable, str) and variable in _SELECTOR_VARIABLES:
         selector = cond.get("selector")
         if selector is None:
@@ -547,6 +599,20 @@ def _check_single_condition(
                     field=f"{prefix}.selector",
                 )
             )
+        elif isinstance(selector, str):
+            # AZ027: check for whitespace in selector
+            if selector != selector.strip():
+                results.append(
+                    _result(
+                        "AZ027",
+                        Severity.INFO,
+                        f"{prefix}: selector {selector!r} has leading or trailing whitespace",
+                        phase,
+                        ref=ref,
+                        field=f"{prefix}.selector",
+                        suggestion=f"Remove whitespace: {selector.strip()!r}",
+                    )
+                )
 
     # AZ311: operator
     operator = cond.get("operator")
@@ -700,6 +766,75 @@ def _check_single_condition(
                             field=f"{prefix}.matchValue",
                         )
                     )
+        # AZ342: Overly-permissive regex
+        for val in match_value:
+            if isinstance(val, str) and val in _OVERLY_PERMISSIVE_REGEX:
+                results.append(
+                    _result(
+                        "AZ342",
+                        Severity.WARNING,
+                        f"{prefix}: regex pattern {val!r} matches every value;"
+                        " this rule has effectively no condition",
+                        phase,
+                        ref=ref,
+                        field=f"{prefix}.matchValue",
+                        suggestion="Use a more specific pattern, or remove the rule"
+                        " if match-all behavior is intentional",
+                    )
+                )
+        # AZ343: Fully-anchored literal regex
+        for val in match_value:
+            if isinstance(val, str) and _FULLY_ANCHORED_LITERAL_REGEX.match(val):
+                results.append(
+                    _result(
+                        "AZ343",
+                        Severity.INFO,
+                        f"{prefix}: regex pattern {val!r} is a fully-anchored literal;"
+                        " use the Equal operator instead",
+                        phase,
+                        ref=ref,
+                        field=f"{prefix}.matchValue",
+                        suggestion="Replace operator RegEx with Equal and use the literal"
+                        " value (without anchors or escapes) as matchValue",
+                    )
+                )
+    # AZ344: RequestMethod uppercase
+    if variable == "RequestMethod" and isinstance(match_value, list):
+        for val in match_value:
+            if isinstance(val, str) and any(c.islower() for c in val):
+                results.append(
+                    _result(
+                        "AZ344",
+                        Severity.WARNING,
+                        f"{prefix}: HTTP method {val!r} contains lowercase letters;"
+                        " Azure method matching is case-sensitive",
+                        phase,
+                        ref=ref,
+                        field=f"{prefix}.matchValue",
+                        suggestion=f"Use uppercase: {val.upper()!r}",
+                    )
+                )
+
+    # AZ345: RequestHeader/Cookies selector lowercase
+    if (
+        isinstance(variable, str)
+        and variable in {"RequestHeader", "Cookies"}
+        and isinstance(cond.get("selector"), str)
+    ):
+        selector = cond.get("selector")
+        if any(c.isupper() for c in selector):
+            results.append(
+                _result(
+                    "AZ345",
+                    Severity.INFO,
+                    f"{prefix}: selector {selector!r} contains uppercase letters;"
+                    " use lowercase for RFC-style header/cookie names",
+                    phase,
+                    ref=ref,
+                    field=f"{prefix}.selector",
+                    suggestion=f"Use lowercase: {selector.lower()!r}",
+                )
+            )
 
     # AZ320/AZ323: GeoMatch country codes
     if operator == "GeoMatch" and isinstance(match_value, list):
@@ -1236,10 +1371,11 @@ def _check_enabled_state(rule: dict, results: list[LintResult], phase: str, ref:
 
 
 def _check_rule_type(rule: dict, results: list[LintResult], phase: str, ref: str) -> None:
-    """AZ006: Validate ruleType value."""
+    """AZ006, AZ027: Validate ruleType value."""
     rule_type = rule.get("ruleType")
     if rule_type is None:
         return  # Optional field
+    _check_whitespace_structural_field("ruleType", rule_type, results, phase, ref)
     if rule_type not in _VALID_RULE_TYPES:
         results.append(
             _result(

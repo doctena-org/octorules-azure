@@ -4,6 +4,8 @@
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
+**Note:** Lint rules fire independently — multiple rules may report on the same input when they catch different concerns, providing richer signal for policy optimization.
+
 ### Suppressing rules
 
 Add a `# octorules:disable=RULE` comment immediately before a rule to suppress a specific finding. Multiple rule IDs can be comma-separated.
@@ -51,6 +53,7 @@ azure_waf_custom_rules:
 | AZ022 | ERROR | structure | Duplicate `ref` within phase |
 | AZ023 | ERROR | structure | Rule entry is not a dict |
 | AZ024 | ERROR | structure | Phase value is not a list |
+| AZ027 | WARNING | structure | Leading/trailing whitespace in structural fields |
 | AZ100 | ERROR | priority | Priority must be a positive integer |
 | AZ101 | ERROR | priority | Duplicate priority across rules |
 | AZ102 | INFO | priority | Non-contiguous rule priorities |
@@ -90,6 +93,10 @@ azure_waf_custom_rules:
 | AZ339 | WARNING | match | Overlapping CIDR across rules in same phase |
 | AZ340 | WARNING | match | Catch-all rule |
 | AZ341 | WARNING | match | Unreachable rule after catch-all |
+| AZ342 | WARNING | match | Overly-permissive regex on `RegEx` operator |
+| AZ343 | INFO | match | Fully-anchored literal regex — suggest `Equal` operator |
+| AZ344 | WARNING | match | HTTP method in matchValue should be uppercase |
+| AZ345 | INFO | match | Header/cookie selector should be lowercase |
 | AZ400 | ERROR | rate_limit | Invalid rateLimitDurationInMinutes |
 | AZ401 | ERROR | rate_limit | Invalid rateLimitThreshold |
 | AZ402 | ERROR | rate_limit | Invalid groupBy variable |
@@ -341,6 +348,33 @@ azure_waf_custom_rules:
     priority: 1
     action: Block
     matchConditions: [...]
+```
+
+---
+
+### AZ027 -- Leading or trailing whitespace in structural fields
+
+**Severity:** WARNING (structural fields), INFO (selector)
+
+Warns when `ref`, `action`, `ruleType` contain leading or trailing whitespace.
+Azure rejects such values or silently normalizes them, causing rule mismatch
+on subsequent plans. The `selector` field (header/cookie/post-arg name) is
+flagged at INFO level only.
+
+**Triggers on:**
+
+```yaml
+  - ref: " BlockBadIPs"      # <-- leading space
+    action: "Block "         # <-- trailing space
+    ruleType: " MatchRule"   # <-- leading space
+```
+
+**Fix:** Remove leading and trailing whitespace:
+
+```yaml
+  - ref: BlockBadIPs
+    action: Block
+    ruleType: MatchRule
 ```
 
 ---
@@ -1025,6 +1059,115 @@ first, so this rule will never execute.
 ```
 
 **Fix:** Remove the unreachable rule or adjust priorities.
+
+### AZ342 -- Overly-permissive regex on `RegEx` operator
+
+**Severity:** WARNING
+
+Flags `RegEx` patterns that match almost everything (patterns that
+accept any sequence of characters with minimal constraints, e.g. `.`,
+`.*`, `^.+$`). No special path-context handling — RequestUri is the
+full URI. Ports Cloudflare CF548 logic.
+
+**Triggers on:** Patterns like `.+`, `.*`, `[a-zA-Z0-9\.\-_]*` without anchors
+or character classes that meaningfully constrain the match.
+
+**Example:**
+
+```yaml
+      - operator: RegEx
+        matchValue:
+          - ".*"             # <-- matches everything
+          - ".+"             # <-- matches anything non-empty
+```
+
+**Fix:** Replace with a more specific pattern or use an operator like
+`Contains`, `BeginsWith`, or `Equal` for better clarity and performance.
+
+### AZ343 -- Fully-anchored literal regex — suggest `Equal` operator
+
+**Severity:** INFO
+
+Info-level notice when a `RegEx` pattern is a fully-anchored literal string
+(e.g. `^foo$`). The `Equal` operator is more efficient and clearer in intent.
+Ports Cloudflare CF549 logic.
+
+**Triggers on:**
+
+```yaml
+      - operator: RegEx
+        matchValue:
+          - "^/admin$"       # <-- literal string, could use Equal
+          - "^foobar$"
+```
+
+**Fix:** Replace with `operator: Equal`:
+
+```yaml
+      - operator: Equal
+        matchValue:
+          - "/admin"
+          - "foobar"
+```
+
+### AZ344 -- HTTP method in matchValue should be uppercase
+
+**Severity:** WARNING
+
+Warns when `matchValue` entries for `RequestMethod` contain lowercase or
+mixed-case HTTP methods. Azure's RequestMethod matching is case-sensitive
+per official docs, so `"get"` will not match the HTTP GET method.
+
+**Triggers on:**
+
+```yaml
+      - matchVariable: RequestMethod
+        operator: Equal
+        matchValue:
+          - "get"            # <-- should be "GET"
+          - "Post"           # <-- should be "POST"
+```
+
+**Fix:** Use uppercase method names:
+
+```yaml
+      - matchVariable: RequestMethod
+        operator: Equal
+        matchValue:
+          - "GET"
+          - "POST"
+          - "PUT"
+```
+
+### AZ345 -- Header/cookie selector should be lowercase
+
+**Severity:** INFO
+
+Info-level notice when selectors for `RequestHeader`, `Cookies`, or `PostArgs`
+use uppercase or mixed case. While Azure's header lookup is case-insensitive,
+lowercase is the standard HTTP convention for readability and consistency.
+
+**Triggers on:**
+
+```yaml
+      - matchVariable: RequestHeader
+        selector: "Content-Type"     # <-- okay, but consider "content-type"
+        operator: Equal
+        matchValue: ["application/json"]
+      - matchVariable: Cookies
+        selector: "SESSION_ID"       # <-- should be "session_id"
+```
+
+**Fix:** Use lowercase selectors with hyphens or underscores as appropriate:
+
+```yaml
+      - matchVariable: RequestHeader
+        selector: "content-type"
+        operator: Equal
+        matchValue: ["application/json"]
+      - matchVariable: Cookies
+        selector: "session_id"
+```
 
 ---
 
