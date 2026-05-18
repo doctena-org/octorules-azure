@@ -88,6 +88,7 @@ AZ400 = RuleMeta("AZ400", "rate_limit", "rateLimitDurationInMinutes invalid", Se
 AZ401 = RuleMeta("AZ401", "rate_limit", "rateLimitThreshold invalid", Severity.ERROR)
 AZ402 = RuleMeta("AZ402", "rate_limit", "Invalid groupBy variable", Severity.ERROR)
 AZ403 = RuleMeta("AZ403", "rate_limit", "rateLimitThreshold below minimum", Severity.ERROR)
+AZ404 = RuleMeta("AZ404", "rate_limit", "rateLimitThreshold exceeds maximum", Severity.ERROR)
 AZ410 = RuleMeta(
     "AZ410",
     "rate_limit",

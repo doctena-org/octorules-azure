@@ -296,7 +296,7 @@ class TestConditionDetails:
 
 
 # ---------------------------------------------------------------------------
-# AZ400-AZ403: Rate limit
+# AZ400-AZ404: Rate limit
 # ---------------------------------------------------------------------------
 class TestRateLimit:
     def _rate_rule(self, **overrides):
@@ -338,7 +338,22 @@ class TestRateLimit:
     def test_threshold_too_high(self):
         rule = self._rate_rule(rateLimitThreshold=2_000_000)
         results = validate_rules([rule])
+        assert_lint(results, "AZ404")
+
+    def test_threshold_non_integer(self):
+        rule = self._rate_rule(rateLimitThreshold="100")
+        results = validate_rules([rule])
         assert_lint(results, "AZ401")
+
+    def test_threshold_min_boundary(self):
+        rule = self._rate_rule(rateLimitThreshold=10)
+        results = validate_rules([rule])
+        assert results == []
+
+    def test_threshold_max_boundary(self):
+        rule = self._rate_rule(rateLimitThreshold=1_000_000)
+        results = validate_rules([rule])
+        assert results == []
 
     def test_invalid_group_by(self):
         rule = self._rate_rule(groupBy=[{"variableName": "BadVar"}])

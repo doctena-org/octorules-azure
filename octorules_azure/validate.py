@@ -74,6 +74,7 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ401",
         "AZ402",
         "AZ403",
+        "AZ404",
         "AZ410",
         "AZ411",
         "AZ600",
@@ -1240,7 +1241,7 @@ def _check_rate_fields_on_match_rule(
 
 
 def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: str) -> None:
-    """AZ400-AZ403: Validate rate limit fields for RateLimitRule."""
+    """AZ400-AZ404: Validate rate limit fields for RateLimitRule."""
     rule_type = rule.get("ruleType")
     if rule_type != "RateLimitRule":
         return
@@ -1309,7 +1310,7 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
     elif threshold > _RATE_THRESHOLD_MAX:
         results.append(
             _result(
-                "AZ401",
+                "AZ404",
                 Severity.ERROR,
                 f"rateLimitThreshold ({threshold}) exceeds maximum of {_RATE_THRESHOLD_MAX}",
                 phase,

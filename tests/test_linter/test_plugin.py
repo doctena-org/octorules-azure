@@ -913,7 +913,7 @@ class TestRuleMetadataIntegrity:
     def test_rule_count_matches_docs(self):
         from octorules_azure.linter._rules import AZ_RULE_METAS
 
-        assert len(AZ_RULE_METAS) == 79
+        assert len(AZ_RULE_METAS) == 80
 
     def test_all_rule_ids_start_with_az(self):
         from octorules_azure.linter._rules import AZ_RULE_METAS
