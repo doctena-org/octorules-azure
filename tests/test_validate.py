@@ -147,10 +147,17 @@ class TestAction:
         assert_lint(results, "AZ200")
 
     def test_valid_actions(self):
-        for action in ("Allow", "Block", "Log", "Redirect", "AnomalyScoring", "JSChallenge"):
+        for action in ("Allow", "Block", "Log", "Redirect", "JSChallenge"):
             rule = make_normalised_rule(action=action)
             errors = [r for r in validate_rules([rule]) if r.rule_id.startswith("AZ2")]
             assert errors == [], f"Unexpected error for action {action!r}: {errors}"
+
+    def test_anomaly_scoring_rejected_on_custom_rules(self):
+        # AnomalyScoring is a managed-rule override action only; MS docs list
+        # custom-rule actions as Allow/Block/Log/Redirect (+ JSChallenge).
+        rule = make_normalised_rule(action="AnomalyScoring")
+        results = validate_rules([rule])
+        assert_lint(results, "AZ200")
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +303,7 @@ class TestConditionDetails:
 
 
 # ---------------------------------------------------------------------------
-# AZ400-AZ404: Rate limit
+# AZ400-AZ403: Rate limit
 # ---------------------------------------------------------------------------
 class TestRateLimit:
     def _rate_rule(self, **overrides):
@@ -330,15 +337,26 @@ class TestRateLimit:
         results = validate_rules([rule])
         assert_lint(results, "AZ401")
 
-    def test_threshold_too_low(self):
-        rule = self._rate_rule(rateLimitThreshold=5)
+    def test_threshold_negative(self):
+        # REST spec minimum is 0 — only negative values are invalid.
+        rule = self._rate_rule(rateLimitThreshold=-5)
         results = validate_rules([rule])
         assert_lint(results, "AZ403")
 
-    def test_threshold_too_high(self):
+    def test_low_threshold_allowed(self):
+        # The previous floor of 10 was an undocumented assumption; the
+        # REST spec allows any threshold >= 0.
+        rule = self._rate_rule(rateLimitThreshold=5)
+        results = validate_rules([rule])
+        assert_no_lint(results, "AZ403")
+
+    def test_high_threshold_allowed(self):
+        # Azure documents no maximum rateLimitThreshold (REST spec: min 0,
+        # no max), so arbitrarily high thresholds must lint clean.
         rule = self._rate_rule(rateLimitThreshold=2_000_000)
         results = validate_rules([rule])
-        assert_lint(results, "AZ404")
+        assert_no_lint(results, "AZ401")
+        assert_no_lint(results, "AZ403")
 
     def test_threshold_non_integer(self):
         rule = self._rate_rule(rateLimitThreshold="100")
@@ -346,7 +364,7 @@ class TestRateLimit:
         assert_lint(results, "AZ401")
 
     def test_threshold_min_boundary(self):
-        rule = self._rate_rule(rateLimitThreshold=10)
+        rule = self._rate_rule(rateLimitThreshold=0)
         results = validate_rules([rule])
         assert results == []
 
@@ -688,7 +706,7 @@ class TestParametrizedEnums:
 
     @pytest.mark.parametrize(
         "action",
-        ["Allow", "Block", "Log", "Redirect", "AnomalyScoring", "JSChallenge"],
+        ["Allow", "Block", "Log", "Redirect", "JSChallenge"],
     )
     def test_all_valid_actions(self, action):
         rule = make_normalised_rule(action=action)
@@ -1353,14 +1371,14 @@ class TestWafTypeAware:
         set_waf_type("")  # Reset after each test
 
     # AZ201: FD-only actions on App Gateway
-    @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring"])
+    @pytest.mark.parametrize("action", ["Redirect"])
     def test_fd_only_action_on_app_gateway(self, action):
         set_waf_type("app_gateway")
         rule = make_normalised_rule(action=action)
         results = validate_rules([rule])
         assert_lint(results, "AZ201")
 
-    @pytest.mark.parametrize("action", ["Redirect", "AnomalyScoring"])
+    @pytest.mark.parametrize("action", ["Redirect"])
     def test_fd_only_action_on_front_door_ok(self, action):
         set_waf_type("front_door")
         rule = make_normalised_rule(action=action)

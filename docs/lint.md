@@ -1,6 +1,6 @@
 # Lint Rule Reference
 
-`octorules lint` performs offline static analysis of your Azure WAF rules files. **74 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
+`octorules lint` performs offline static analysis of your Azure WAF rules files. **79 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
@@ -448,7 +448,8 @@ Azure Front Door WAF requires custom rule priorities in the range 1–100. Prior
 **Severity:** ERROR
 
 The `action` field must be one of: `Allow`, `Block`, `Log`, `Redirect`,
-`AnomalyScoring`, or `JSChallenge`.
+or `JSChallenge`. `AnomalyScoring` is not a custom-rule action — it exists
+only as a managed-rule override action (see the managed-rules section).
 
 **Triggers on:**
 
@@ -459,14 +460,16 @@ The `action` field must be one of: `Allow`, `Block`, `Log`, `Redirect`,
 
 **Fix:** Use `Block` instead of `Deny`.
 
-Note: `Redirect` and `AnomalyScoring` are Front Door only.
+Note: `Redirect` is Front Door only; `JSChallenge` is GA on Front Door
+Premium and preview on Application Gateway (and not supported on App
+Gateway rate-limit rules while in preview).
 See AZ201 for waf_type-aware validation.
 
 ### AZ201 -- Action not supported on this WAF type
 
 **Severity:** ERROR
 
-Fires when a Front Door-only action (`Redirect`, `AnomalyScoring`) is used
+Fires when a Front Door-only action (`Redirect`) is used
 with `waf_type: app_gateway`. These actions will be rejected by the App
 Gateway API at deployment time.
 
@@ -526,6 +529,13 @@ The `matchVariable` must be one of: `RemoteAddr`, `SocketAddr`,
 The `operator` must be one of: `Any`, `IPMatch`, `GeoMatch`, `Equal`,
 `Contains`, `BeginsWith`, `EndsWith`, `RegEx`, `LessThan`, `GreaterThan`,
 `LessThanOrEqual`, `GreaterThanOrEqual`, `ServiceTagMatch`.
+
+> **Note:** Azure's Front Door spec (api-version 2025-11-01) adds two more
+> operators, `AsnMatch` and `ClientFingerprint`. octorules does not accept
+> them yet: the `azure-mgmt-frontdoor` SDK it deploys through pins
+> api-version 2024-02-01, where ARM rejects those operators — accepting
+> them at lint time would bless rules that fail at apply. They will be
+> added when the SDK targets api-version 2025-11-01 or later.
 
 **Triggers on:**
 
@@ -1190,15 +1200,17 @@ For `RateLimitRule` rules, `rateLimitDurationInMinutes` must be `1` or `5`
 
 **Severity:** ERROR
 
-The threshold must be an integer and must not exceed 1,000,000. Must not be
-a non-integer type (string, float, bool). Values below 10 produce AZ403
-instead.
+The threshold must be an integer. Must not be a non-integer type (string,
+float, bool). Negative values produce AZ403 instead.
+
+There is no upper-bound check: Azure documents no maximum
+`rateLimitThreshold` (the REST API spec constrains it to minimum 0 with no
+maximum). A runtime cap may exist server-side but is unpublished.
 
 **Triggers on:**
 
 ```yaml
     rateLimitThreshold: "100"        # <-- string, must be int
-    rateLimitThreshold: 2000000      # <-- exceeds 1,000,000
 ```
 
 ### AZ402 -- Invalid groupBy variable
@@ -1206,6 +1218,13 @@ instead.
 **Severity:** ERROR
 
 The `groupBy.variableName` must be `SocketAddr`, `GeoLocation`, or `None`.
+
+> **Note:** Application Gateway additionally documents two XFF-based
+> grouping variables (`ClientAddrXFFHeader`, `GeoLocationXFFHeader`).
+> octorules does not accept them yet: the installed `azure-mgmt-network`
+> SDK (26.0.0) targets an api-version that predates them, so deploys
+> would be rejected. They will be added when the SDK dependency is
+> upgraded to a version whose api-version includes them.
 
 **Triggers on:**
 
@@ -1218,12 +1237,14 @@ The `groupBy.variableName` must be `SocketAddr`, `GeoLocation`, or `None`.
 
 **Severity:** ERROR
 
-Azure requires a minimum threshold of 10 requests per time window.
+The REST API spec constrains `rateLimitThreshold` to a minimum of 0, so
+only negative values are invalid. (Earlier releases enforced an
+undocumented floor of 10.)
 
 **Triggers on:**
 
 ```yaml
-    rateLimitThreshold: 5            # <-- below minimum of 10
+    rateLimitThreshold: -5           # <-- negative; spec minimum is 0
 ```
 
 ### AZ410 -- RateLimitRule matches all traffic
@@ -1565,7 +1586,7 @@ field that is a non-empty string identifying the managed rule to override.
 **Severity:** ERROR
 
 The `action` field in a managed rule override must be one of: `Allow`,
-`Block`, `Log`, `Redirect`, or `AnomalyScoring`.
+`Block`, `Log`, `Redirect`, `AnomalyScoring`, `None`, or `JSChallenge`.
 
 **Triggers on:**
 

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-06-11
+
+### Changed
+- Minimum `octorules` dependency: `>=0.29.0`.
+
+### Fixed
+- **AZ200** rejects `AnomalyScoring` as a custom-rule action; the API
+  only accepts it as a managed-rule override.
+- **AZ403**'s `rateLimitThreshold` minimum is now 0; only negative
+  values error.
+
+### Removed
+- **AZ404**: Azure documents no maximum `rateLimitThreshold`; any
+  threshold >= 0 now lints clean.
+
 ## [0.2.1] - 2026-05-18
 
 ### Added

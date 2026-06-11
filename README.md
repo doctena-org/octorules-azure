@@ -4,7 +4,7 @@ Azure WAF provider for [octorules](https://github.com/doctena-org/octorules) —
 
 Supports both **Azure Front Door WAF** (Premium/Standard) and **Application Gateway WAF** (WAF_v2) through a unified interface. Users write the same YAML regardless of which WAF type is deployed.
 
-> **Alpha** — this provider has comprehensive offline test coverage (662 tests)
+> **Alpha** — this provider has comprehensive offline test coverage (698 tests)
 > but has not yet been tested against live Azure WAF APIs. Use with caution and
 > report any issues.
 
@@ -176,12 +176,12 @@ azure_waf_rate_rules:
 |---|---|---|---|
 | `ref` | string | Yes | Rule name (letters, digits, underscores; max 128 chars) |
 | `priority` | int | Yes | Evaluation order (positive int, lower = first; must be unique across all rules) |
-| `action` | string | Yes | `Allow`, `Block`, `Log`, `Redirect`, `AnomalyScoring`, or `JSChallenge` |
+| `action` | string | Yes | `Allow`, `Block`, `Log`, `Redirect`, or `JSChallenge` |
 | `enabledState` | string | No | `Enabled` (default) or `Disabled` |
 | `ruleType` | string | No | `MatchRule` (default) or `RateLimitRule` |
 | `matchConditions` | list | Yes | One or more conditions (ANDed); max 10 per rule |
 | `rateLimitDurationInMinutes` | int | RateLimitRule | `1` or `5` (time window) |
-| `rateLimitThreshold` | int | RateLimitRule | Requests per client in the window (10 — 1,000,000) |
+| `rateLimitThreshold` | int | RateLimitRule | Requests per client in the window (>= 0; Azure documents no maximum) |
 | `groupBy` | list | No | Rate limit grouping: `SocketAddr`, `GeoLocation`, or `None` |
 
 ### Match condition fields
@@ -205,7 +205,7 @@ The adapter pattern handles all API differences transparently. Users write ident
 | **Propagation** | Up to 45 minutes | Seconds to minutes |
 | **SDK** | `azure-mgmt-frontdoor` | `azure-mgmt-network` |
 | **Update model** | Async LRO (`begin_create_or_update`) | Synchronous (`create_or_update`) |
-| **Extra actions** | Redirect, AnomalyScoring | -- |
+| **Extra actions** | Redirect | -- |
 | **Extra transforms** | -- | HtmlEntityDecode |
 | **Extra operators** | ServiceTagMatch | -- |
 | **Match variable names** | `RequestHeader`, `Cookies` | `RequestHeaders`, `RequestCookies` (adapter maps) |

@@ -9,6 +9,11 @@ import re
 from contextvars import ContextVar
 
 from octorules.linter.engine import LintResult, Severity
+from octorules.linter.helpers import (
+    CATCH_ALL_CIDRS,
+    find_duplicate_priorities,
+    find_first_priority_gap,
+)
 from octorules.reserved_ips import is_reserved
 
 # Rule IDs emitted by validate_rules() / validate_managed_rules() — kept in
@@ -74,7 +79,6 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ401",
         "AZ402",
         "AZ403",
-        "AZ404",
         "AZ410",
         "AZ411",
         "AZ600",
@@ -131,10 +135,14 @@ _MAX_NAME_LEN = 128
 _FD_MAX_PRIORITY = 100
 _NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 
-_VALID_ACTIONS = frozenset({"Allow", "Block", "Log", "Redirect", "AnomalyScoring", "JSChallenge"})
+# Custom-rule actions per MS docs: FD = Allow/Block/Log/Redirect (+ JSChallenge
+# on Premium); AG = Allow/Block/Log (+ JSChallenge, preview). AnomalyScoring is
+# a managed-rule override action only and is rejected here (see the separate
+# override-action set used for managed-rule validation).
+_VALID_ACTIONS = frozenset({"Allow", "Block", "Log", "Redirect", "JSChallenge"})
 
 # waf_type-aware validation: features restricted to one WAF type.
-_FD_ONLY_ACTIONS = frozenset({"Redirect", "AnomalyScoring"})
+_FD_ONLY_ACTIONS = frozenset({"Redirect"})
 _FD_ONLY_OPERATORS = frozenset({"ServiceTagMatch"})
 _FD_ONLY_VARIABLES = frozenset({"SocketAddr"})
 _AG_ONLY_TRANSFORMS = frozenset({"HtmlEntityDecode"})
@@ -204,8 +212,10 @@ _VALID_TRANSFORMS = frozenset(
 )
 
 _VALID_RATE_DURATIONS = frozenset({1, 5})  # minutes
-_RATE_THRESHOLD_MIN = 10
-_RATE_THRESHOLD_MAX = 1_000_000
+# Azure's REST spec constrains rateLimitThreshold to minimum 0 with no
+# maximum, so AZ403 only rejects negative values and there is deliberately
+# no upper-bound check.
+_RATE_THRESHOLD_MIN = 0
 
 _VALID_GROUP_BY_VARIABLES = frozenset({"SocketAddr", "GeoLocation", "None"})
 
@@ -233,8 +243,6 @@ _STRING_OPERATORS = frozenset(
 _NO_TRANSFORM_OPERATORS = frozenset({"IPMatch", "GeoMatch", "Any", "ServiceTagMatch"})
 
 # Catch-all CIDR ranges (match everything).
-_CATCH_ALL_CIDRS = frozenset({"0.0.0.0/0", "::/0"})
-
 # Reserved/bogon network detection is provided by octorules.reserved_ips
 # (single source of truth across providers; see core v0.26.0).
 
@@ -1073,7 +1081,7 @@ def _check_cidr_catch_all(
     val: str, results: list[LintResult], phase: str, ref: str, prefix: str
 ) -> None:
     """AZ322: Warn on catch-all CIDR ranges (0.0.0.0/0 or ::/0)."""
-    if val in _CATCH_ALL_CIDRS:
+    if val in CATCH_ALL_CIDRS:
         results.append(
             _result(
                 "AZ322",
@@ -1241,7 +1249,7 @@ def _check_rate_fields_on_match_rule(
 
 
 def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: str) -> None:
-    """AZ400-AZ404: Validate rate limit fields for RateLimitRule."""
+    """AZ400-AZ403: Validate rate limit fields for RateLimitRule."""
     rule_type = rule.get("ruleType")
     if rule_type != "RateLimitRule":
         return
@@ -1302,17 +1310,6 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
                 "AZ403",
                 Severity.ERROR,
                 f"rateLimitThreshold ({threshold}) below minimum of {_RATE_THRESHOLD_MIN}",
-                phase,
-                ref=ref,
-                field="rateLimitThreshold",
-            )
-        )
-    elif threshold > _RATE_THRESHOLD_MAX:
-        results.append(
-            _result(
-                "AZ404",
-                Severity.ERROR,
-                f"rateLimitThreshold ({threshold}) exceeds maximum of {_RATE_THRESHOLD_MAX}",
                 phase,
                 ref=ref,
                 field="rateLimitThreshold",
@@ -1429,16 +1426,15 @@ def _check_duplicate_priorities(
     seen: dict[int, list[str]], results: list[LintResult], phase: str
 ) -> None:
     """AZ101: Duplicate priorities."""
-    for priority, refs in sorted(seen.items()):
-        if len(refs) > 1:
-            results.append(
-                _result(
-                    "AZ101",
-                    Severity.ERROR,
-                    f"Duplicate priority {priority}: {', '.join(refs)}",
-                    phase,
-                )
+    for priority, refs in find_duplicate_priorities(seen):
+        results.append(
+            _result(
+                "AZ101",
+                Severity.ERROR,
+                f"Duplicate priority {priority}: {', '.join(refs)}",
+                phase,
             )
+        )
 
 
 def _check_duplicate_refs(seen: dict[str, int], results: list[LintResult], phase: str) -> None:
@@ -1458,21 +1454,16 @@ def _check_duplicate_refs(seen: dict[str, int], results: list[LintResult], phase
 
 def _check_priority_gaps(seen: dict[int, list[str]], results: list[LintResult], phase: str) -> None:
     """AZ102: Non-contiguous priorities (info)."""
-    priorities = sorted(seen.keys())
-    if len(priorities) < 2:
-        return
-    for i in range(1, len(priorities)):
-        if priorities[i] != priorities[i - 1] + 1:
-            results.append(
-                _result(
-                    "AZ102",
-                    Severity.INFO,
-                    f"Non-contiguous priorities: gap between {priorities[i - 1]}"
-                    f" and {priorities[i]}",
-                    phase,
-                )
+    gap = find_first_priority_gap(seen.keys())
+    if gap is not None:
+        results.append(
+            _result(
+                "AZ102",
+                Severity.INFO,
+                f"Non-contiguous priorities: gap between {gap[0]} and {gap[1]}",
+                phase,
             )
-            return  # Only report first gap
+        )
 
 
 def _is_catch_all_condition(cond: dict) -> bool:
@@ -1486,7 +1477,7 @@ def _is_catch_all_condition(cond: dict) -> bool:
     # IPMatch with 0.0.0.0/0 or ::/0 is effectively Any
     if operator == "IPMatch" and not negate:
         values = cond.get("matchValue", [])
-        if isinstance(values, list) and any(v in _CATCH_ALL_CIDRS for v in values):
+        if isinstance(values, list) and any(v in CATCH_ALL_CIDRS for v in values):
             return True
     return False
 
@@ -1655,7 +1646,7 @@ def _check_cross_rule_cidr_overlaps(
             for val in cond.get("matchValue", []) or []:
                 if not isinstance(val, str):
                     continue
-                if val in _CATCH_ALL_CIDRS:
+                if val in CATCH_ALL_CIDRS:
                     continue  # AZ322's domain
                 try:
                     if "/" in val:
