@@ -72,6 +72,12 @@ Safety thresholds are configured under `safety:` (framework-owned, not forwarded
 | `safety.update_threshold` | `30.0` | Max % of rules that can be updated |
 | `safety.min_existing` | `3` | Min rules before thresholds apply |
 
+## Examples
+
+The [`examples/`](examples/) directory contains a working single-provider
+`config.yaml` plus `rules/my-waf-policy.yaml` demonstrating every supported
+phase and key. Copy it as a starting point.
+
 ## Supported features
 
 | Feature | Status | Azure concept |
@@ -240,7 +246,7 @@ python -m venv .venv
 Pre-commit hook:
 
 ```bash
-ln -sf ../../scripts/hooks/pre-commit .git/hooks/pre-commit
+pre-commit install
 ```
 
 ## License
