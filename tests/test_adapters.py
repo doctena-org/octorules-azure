@@ -2,6 +2,7 @@
 
 import pytest
 from octorules.config import ConfigError
+from octorules.provider.exceptions import ProviderError
 
 from octorules_azure._adapters import (
     AppGatewayAdapter,
@@ -548,3 +549,28 @@ class TestAdapterEdgeCases:
         assert result["matchConditions"][0]["matchVariable"] == "Cookies"
         denorm = adapter.denormalize_rule(result)
         assert denorm["match_conditions"][0]["match_variable"] == "Cookies"
+
+    def test_ag_invalid_rate_limit_duration_raises_provider_error(self):
+        """App Gateway denormalize raises ProviderError on invalid rateLimitDurationInMinutes."""
+        adapter = AppGatewayAdapter()
+        normalised = {
+            "ref": "InvalidRate",
+            "priority": 1,
+            "enabledState": "Enabled",
+            "ruleType": "RateLimitRule",
+            "rateLimitDurationInMinutes": 10,  # Invalid: only 1 or 5 are valid
+            "rateLimitThreshold": 100,
+            "matchConditions": [
+                {
+                    "matchVariable": "RemoteAddr",
+                    "selector": None,
+                    "operator": "Any",
+                    "negateCondition": False,
+                    "matchValue": [],
+                    "transforms": [],
+                }
+            ],
+            "action": "Block",
+        }
+        with pytest.raises(ProviderError, match="Invalid rateLimitDurationInMinutes"):
+            adapter.denormalize_rule(normalised)

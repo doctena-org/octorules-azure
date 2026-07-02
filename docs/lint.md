@@ -1004,15 +1004,15 @@ under a second.
 **Triggers on:**
 
 ```yaml
-customRules:
-  - name: blockKnownBad
+azure_waf_custom_rules:
+  - ref: blockKnownBad
     priority: 100
     action: Block
     matchConditions:
       - matchVariable: RemoteAddr
         operator: IPMatch
         matchValue: ["10.0.0.0/8"]      # broader
-  - name: blockSpecificSubnet
+  - ref: blockSpecificSubnet
     priority: 200
     action: Block
     matchConditions:

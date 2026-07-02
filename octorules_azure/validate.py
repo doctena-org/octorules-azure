@@ -13,6 +13,10 @@ from octorules.linter.helpers import (
     CATCH_ALL_CIDRS,
     find_duplicate_priorities,
     find_first_priority_gap,
+    find_overlapping_cidrs,
+    is_strict_int,
+    lint_result,
+    normalize_host_bits,
 )
 from octorules.reserved_ips import is_reserved
 
@@ -96,33 +100,6 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ708",
     }
 )
-
-
-def _result(
-    rule_id: str,
-    severity: Severity,
-    message: str,
-    phase: str,
-    ref: str = "",
-    *,
-    field: str = "",
-    suggestion: str = "",
-) -> LintResult:
-    """Create a LintResult with common defaults."""
-    return LintResult(
-        rule_id=rule_id,
-        severity=severity,
-        message=message,
-        phase=phase,
-        ref=ref,
-        field=field,
-        suggestion=suggestion,
-    )
-
-
-def _is_strict_int(val: object) -> bool:
-    """True if *val* is an int but not a bool."""
-    return isinstance(val, int) and not isinstance(val, bool)
 
 
 # ---------------------------------------------------------------------------
@@ -308,13 +285,15 @@ def _check_ref(rule: dict, results: list[LintResult], phase: str) -> str:
     """AZ001, AZ010, AZ022, AZ027: Validate ref field."""
     ref = rule.get("ref")
     if ref is None or ref == "":
-        results.append(_result("AZ001", Severity.ERROR, "Rule missing 'ref'", phase, field="ref"))
+        results.append(
+            lint_result("AZ001", Severity.ERROR, "Rule missing 'ref'", phase, field="ref")
+        )
         return ""
     ref_str = str(ref)
     _check_whitespace_structural_field("ref", ref_str, results, phase, "")
     if len(ref_str) > _MAX_NAME_LEN:
         results.append(
-            _result(
+            lint_result(
                 "AZ010",
                 Severity.ERROR,
                 f"ref exceeds {_MAX_NAME_LEN} characters ({len(ref_str)})",
@@ -325,7 +304,7 @@ def _check_ref(rule: dict, results: list[LintResult], phase: str) -> str:
         )
     elif not _NAME_RE.match(ref_str):
         results.append(
-            _result(
+            lint_result(
                 "AZ010",
                 Severity.ERROR,
                 "ref must start with a letter and contain only letters, digits, and underscores",
@@ -344,7 +323,7 @@ def _check_whitespace_structural_field(
     """AZ027: Check for leading/trailing whitespace in structural fields."""
     if isinstance(field_value, str) and (field_value != field_value.strip()):
         results.append(
-            _result(
+            lint_result(
                 "AZ027",
                 Severity.WARNING,
                 f"{field_name}: has leading or trailing whitespace",
@@ -366,11 +345,13 @@ def _check_priority(
     """AZ002, AZ100: Validate priority field."""
     priority = rule.get("priority")
     if priority is None:
-        results.append(_result("AZ002", Severity.ERROR, "Rule missing 'priority'", phase, ref=ref))
-        return
-    if not _is_strict_int(priority) or priority < 1:
         results.append(
-            _result(
+            lint_result("AZ002", Severity.ERROR, "Rule missing 'priority'", phase, ref=ref)
+        )
+        return
+    if not is_strict_int(priority) or priority < 1:
+        results.append(
+            lint_result(
                 "AZ100",
                 Severity.ERROR,
                 f"priority must be a positive integer, got {priority!r}",
@@ -385,7 +366,7 @@ def _check_priority(
     # AZ103: Front Door priority range (1-100)
     if _WAF_TYPE.get() == "front_door" and priority > _FD_MAX_PRIORITY:
         results.append(
-            _result(
+            lint_result(
                 "AZ103",
                 Severity.WARNING,
                 f"Priority {priority} exceeds the Front Door maximum of {_FD_MAX_PRIORITY}",
@@ -400,11 +381,13 @@ def _check_action(rule: dict, results: list[LintResult], phase: str, ref: str) -
     """AZ003, AZ027, AZ200: Validate action field."""
     action = rule.get("action")
     if action is None or action == "":
-        results.append(_result("AZ003", Severity.ERROR, "Rule missing 'action'", phase, ref=ref))
+        results.append(
+            lint_result("AZ003", Severity.ERROR, "Rule missing 'action'", phase, ref=ref)
+        )
         return
     if not isinstance(action, str):
         results.append(
-            _result(
+            lint_result(
                 "AZ200",
                 Severity.ERROR,
                 f"action must be a string, got {type(action).__name__}",
@@ -417,7 +400,7 @@ def _check_action(rule: dict, results: list[LintResult], phase: str, ref: str) -
     _check_whitespace_structural_field("action", action, results, phase, ref)
     if action not in _VALID_ACTIONS:
         results.append(
-            _result(
+            lint_result(
                 "AZ200",
                 Severity.ERROR,
                 f"Invalid action {action!r}",
@@ -432,7 +415,7 @@ def _check_action(rule: dict, results: list[LintResult], phase: str, ref: str) -
     # AZ201: FD-only action used with App Gateway
     if _WAF_TYPE.get() == "app_gateway" and action in _FD_ONLY_ACTIONS:
         results.append(
-            _result(
+            lint_result(
                 "AZ201",
                 Severity.ERROR,
                 f"Action {action!r} is only supported on Front Door, not Application Gateway",
@@ -448,7 +431,7 @@ def _check_match_conditions(rule: dict, results: list[LintResult], phase: str, r
     conditions = rule.get("matchConditions")
     if conditions is None:
         results.append(
-            _result(
+            lint_result(
                 "AZ004",
                 Severity.ERROR,
                 "Rule missing 'matchConditions'",
@@ -459,7 +442,7 @@ def _check_match_conditions(rule: dict, results: list[LintResult], phase: str, r
         return
     if not isinstance(conditions, list):
         results.append(
-            _result(
+            lint_result(
                 "AZ300",
                 Severity.ERROR,
                 f"matchConditions must be a list, got {type(conditions).__name__}",
@@ -471,7 +454,7 @@ def _check_match_conditions(rule: dict, results: list[LintResult], phase: str, r
         return
     if len(conditions) == 0:
         results.append(
-            _result(
+            lint_result(
                 "AZ300",
                 Severity.ERROR,
                 "matchConditions must be a non-empty list",
@@ -483,7 +466,7 @@ def _check_match_conditions(rule: dict, results: list[LintResult], phase: str, r
         return
     if len(conditions) > _MAX_MATCH_CONDITIONS:
         results.append(
-            _result(
+            lint_result(
                 "AZ301",
                 Severity.ERROR,
                 f"matchConditions has {len(conditions)} entries,"
@@ -497,7 +480,7 @@ def _check_match_conditions(rule: dict, results: list[LintResult], phase: str, r
     for i, cond in enumerate(conditions):
         if not isinstance(cond, dict):
             results.append(
-                _result(
+                lint_result(
                     "AZ300",
                     Severity.ERROR,
                     f"matchConditions[{i}] must be a dict, got {type(cond).__name__}",
@@ -527,7 +510,7 @@ def _check_single_condition(
     variable = cond.get("matchVariable")
     if not isinstance(variable, str) or not variable:
         results.append(
-            _result(
+            lint_result(
                 "AZ310",
                 Severity.ERROR,
                 f"{prefix}: missing or empty matchVariable",
@@ -538,7 +521,7 @@ def _check_single_condition(
         )
     elif variable not in _VALID_MATCH_VARIABLES:
         results.append(
-            _result(
+            lint_result(
                 "AZ310",
                 Severity.ERROR,
                 f"{prefix}: invalid matchVariable {variable!r}",
@@ -556,7 +539,7 @@ def _check_single_condition(
         and variable in _FD_ONLY_VARIABLES
     ):
         results.append(
-            _result(
+            lint_result(
                 "AZ327",
                 Severity.ERROR,
                 f"{prefix}: matchVariable {variable!r} is only supported on"
@@ -572,7 +555,7 @@ def _check_single_condition(
         selector = cond.get("selector")
         if isinstance(selector, str) and selector:
             results.append(
-                _result(
+                lint_result(
                     "AZ321",
                     Severity.WARNING,
                     f"{prefix}: selector {selector!r} is set but {variable} does not use selectors",
@@ -588,7 +571,7 @@ def _check_single_condition(
         selector = cond.get("selector")
         if selector is None:
             results.append(
-                _result(
+                lint_result(
                     "AZ315",
                     Severity.ERROR,
                     f"{prefix}: selector is required for {variable}",
@@ -599,7 +582,7 @@ def _check_single_condition(
             )
         elif isinstance(selector, str) and selector == "":
             results.append(
-                _result(
+                lint_result(
                     "AZ316",
                     Severity.WARNING,
                     f"{prefix}: selector is empty for {variable}",
@@ -612,7 +595,7 @@ def _check_single_condition(
             # AZ027: check for whitespace in selector
             if selector != selector.strip():
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ027",
                         Severity.INFO,
                         f"{prefix}: selector {selector!r} has leading or trailing whitespace",
@@ -627,7 +610,7 @@ def _check_single_condition(
     operator = cond.get("operator")
     if not isinstance(operator, str) or not operator:
         results.append(
-            _result(
+            lint_result(
                 "AZ311",
                 Severity.ERROR,
                 f"{prefix}: missing or empty operator",
@@ -638,7 +621,7 @@ def _check_single_condition(
         )
     elif operator not in _VALID_OPERATORS:
         results.append(
-            _result(
+            lint_result(
                 "AZ311",
                 Severity.ERROR,
                 f"{prefix}: invalid operator {operator!r}",
@@ -656,7 +639,7 @@ def _check_single_condition(
         and operator in _FD_ONLY_OPERATORS
     ):
         results.append(
-            _result(
+            lint_result(
                 "AZ326",
                 Severity.ERROR,
                 f"{prefix}: operator {operator!r} is only supported on"
@@ -671,7 +654,7 @@ def _check_single_condition(
     negate = cond.get("negateCondition")
     if negate is not None and not isinstance(negate, bool):
         results.append(
-            _result(
+            lint_result(
                 "AZ021",
                 Severity.ERROR,
                 f"{prefix}: negateCondition must be a boolean, got {type(negate).__name__}",
@@ -684,7 +667,7 @@ def _check_single_condition(
     # AZ324: negated Any operator always false (rule never matches)
     if operator == "Any" and negate is True:
         results.append(
-            _result(
+            lint_result(
                 "AZ324",
                 Severity.WARNING,
                 f"{prefix}: negated Any operator never matches (always false)",
@@ -699,7 +682,7 @@ def _check_single_condition(
     match_value = cond.get("matchValue")
     if operator == "Any" and isinstance(match_value, list) and len(match_value) > 0:
         results.append(
-            _result(
+            lint_result(
                 "AZ325",
                 Severity.WARNING,
                 f"{prefix}: matchValue is ignored when operator is Any",
@@ -714,7 +697,7 @@ def _check_single_condition(
     if operator and operator != "Any":
         if not isinstance(match_value, list) or len(match_value) == 0:
             results.append(
-                _result(
+                lint_result(
                     "AZ312",
                     Severity.ERROR,
                     f"{prefix}: matchValue required for operator {operator!r}",
@@ -727,7 +710,7 @@ def _check_single_condition(
             if operator == "IPMatch":
                 if len(match_value) > _MAX_IP_MATCH_VALUES:
                     results.append(
-                        _result(
+                        lint_result(
                             "AZ313",
                             Severity.ERROR,
                             f"{prefix}: matchValue has {len(match_value)} entries,"
@@ -747,7 +730,7 @@ def _check_single_condition(
                 _check_redundant_cidrs(match_value, results, phase, ref, prefix)
             elif len(match_value) > _MAX_STRING_MATCH_VALUES:
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ313",
                         Severity.ERROR,
                         f"{prefix}: matchValue has {len(match_value)} entries,"
@@ -766,7 +749,7 @@ def _check_single_condition(
                     re.compile(val)
                 except re.error as exc:
                     results.append(
-                        _result(
+                        lint_result(
                             "AZ317",
                             Severity.ERROR,
                             f"{prefix}: invalid regex pattern {val!r}: {exc}",
@@ -779,7 +762,7 @@ def _check_single_condition(
         for val in match_value:
             if isinstance(val, str) and val in _OVERLY_PERMISSIVE_REGEX:
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ342",
                         Severity.WARNING,
                         f"{prefix}: regex pattern {val!r} matches every value;"
@@ -795,7 +778,7 @@ def _check_single_condition(
         for val in match_value:
             if isinstance(val, str) and _FULLY_ANCHORED_LITERAL_REGEX.match(val):
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ343",
                         Severity.INFO,
                         f"{prefix}: regex pattern {val!r} is a fully-anchored literal;"
@@ -812,7 +795,7 @@ def _check_single_condition(
         for val in match_value:
             if isinstance(val, str) and any(c.islower() for c in val):
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ344",
                         Severity.WARNING,
                         f"{prefix}: HTTP method {val!r} contains lowercase letters;"
@@ -833,7 +816,7 @@ def _check_single_condition(
         selector = cond.get("selector")
         if any(c.isupper() for c in selector):
             results.append(
-                _result(
+                lint_result(
                     "AZ345",
                     Severity.INFO,
                     f"{prefix}: selector {selector!r} contains uppercase letters;"
@@ -850,7 +833,7 @@ def _check_single_condition(
         for val in match_value:
             if isinstance(val, str) and not _COUNTRY_CODE_RE.match(val):
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ320",
                         Severity.WARNING,
                         f"{prefix}: unknown country code {val!r} in GeoMatch",
@@ -861,7 +844,7 @@ def _check_single_condition(
                 )
         if len(match_value) >= _MAX_GEO_COUNTRY_CODES:
             results.append(
-                _result(
+                lint_result(
                     "AZ323",
                     Severity.WARNING,
                     f"{prefix}: GeoMatch has {len(match_value)} country codes"
@@ -878,7 +861,7 @@ def _check_single_condition(
         for t in transforms:
             if isinstance(t, str) and t not in _VALID_TRANSFORMS:
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ314",
                         Severity.ERROR,
                         f"{prefix}: invalid transform {t!r}",
@@ -894,7 +877,7 @@ def _check_single_condition(
         for t in transforms:
             if isinstance(t, str) and t in _AG_ONLY_TRANSFORMS:
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ328",
                         Severity.ERROR,
                         f"{prefix}: transform {t!r} is only supported on"
@@ -913,7 +896,7 @@ def _check_single_condition(
         and operator in _NO_TRANSFORM_OPERATORS
     ):
         results.append(
-            _result(
+            lint_result(
                 "AZ333",
                 Severity.WARNING,
                 f"{prefix}: transforms have no effect with operator {operator!r}",
@@ -931,7 +914,7 @@ def _check_single_condition(
         and any(isinstance(v, str) and v == "" for v in match_value)
     ):
         results.append(
-            _result(
+            lint_result(
                 "AZ335",
                 Severity.WARNING,
                 f"{prefix}: matchValue contains an empty string",
@@ -952,7 +935,7 @@ def _check_single_condition(
                 )
                 if lower in seen_vals:
                     results.append(
-                        _result(
+                        lint_result(
                             "AZ334",
                             Severity.WARNING,
                             f"{prefix}: duplicate matchValue entry {val!r}",
@@ -970,7 +953,7 @@ def _check_single_condition(
         for a, b in _CONFLICTING_TRANSFORMS:
             if a in transform_set and b in transform_set:
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ330",
                         Severity.WARNING,
                         f"{prefix}: conflicting transforms {a} and {b} cancel each other",
@@ -986,7 +969,7 @@ def _check_single_condition(
             for t in transforms:
                 if t in seen_t:
                     results.append(
-                        _result(
+                        lint_result(
                             "AZ330",
                             Severity.WARNING,
                             f"{prefix}: duplicate transform {t!r}",
@@ -1003,7 +986,7 @@ def _check_single_condition(
         for j, val in enumerate(match_value):
             if not isinstance(val, str):
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ331",
                         Severity.ERROR,
                         f"{prefix}: matchValue[{j}] must be a string, got {type(val).__name__}",
@@ -1019,7 +1002,7 @@ def _check_single_condition(
         for val in match_value:
             if isinstance(val, str) and len(val) > _MAX_REGEX_PATTERN_LEN:
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ332",
                         Severity.WARNING,
                         f"{prefix}: regex pattern is {len(val)} chars,"
@@ -1034,39 +1017,40 @@ def _check_single_condition(
 def _check_cidr(val: str, results: list[LintResult], phase: str, ref: str, prefix: str) -> None:
     """AZ318/AZ337: Validate a single CIDR/IP value."""
     if "/" in val:
+        # AZ337: Check for host bits set (returns normalized CIDR if present)
+        normalized = normalize_host_bits(val)
+        if normalized is not None:
+            results.append(
+                lint_result(
+                    "AZ337",
+                    Severity.WARNING,
+                    f"{prefix}: CIDR has host bits set: {val!r} (did you mean {normalized}?)",
+                    phase,
+                    ref=ref,
+                    field=f"{prefix}.matchValue",
+                )
+            )
+            return
+        # AZ318: Invalid CIDR (failed both strict and non-strict parsing)
         try:
             ipaddress.ip_network(val, strict=True)
         except ValueError:
-            # Host bits set — try non-strict to see if it's a normalizable CIDR
-            try:
-                net = ipaddress.ip_network(val, strict=False)
-                results.append(
-                    _result(
-                        "AZ337",
-                        Severity.WARNING,
-                        f"{prefix}: CIDR has host bits set: {val!r} (did you mean {net}?)",
-                        phase,
-                        ref=ref,
-                        field=f"{prefix}.matchValue",
-                    )
+            results.append(
+                lint_result(
+                    "AZ318",
+                    Severity.WARNING,
+                    f"{prefix}: invalid CIDR/IP {val!r}",
+                    phase,
+                    ref=ref,
+                    field=f"{prefix}.matchValue",
                 )
-            except ValueError:
-                results.append(
-                    _result(
-                        "AZ318",
-                        Severity.WARNING,
-                        f"{prefix}: invalid CIDR/IP {val!r}",
-                        phase,
-                        ref=ref,
-                        field=f"{prefix}.matchValue",
-                    )
-                )
+            )
     else:
         try:
             ipaddress.ip_address(val)
         except ValueError:
             results.append(
-                _result(
+                lint_result(
                     "AZ318",
                     Severity.WARNING,
                     f"{prefix}: invalid CIDR/IP {val!r}",
@@ -1083,7 +1067,7 @@ def _check_cidr_catch_all(
     """AZ322: Warn on catch-all CIDR ranges (0.0.0.0/0 or ::/0)."""
     if val in CATCH_ALL_CIDRS:
         results.append(
-            _result(
+            lint_result(
                 "AZ322",
                 Severity.WARNING,
                 f"{prefix}: {val} matches all traffic (catch-all CIDR)",
@@ -1111,7 +1095,7 @@ def _check_cidr_private(
     if desc is None:
         return
     results.append(
-        _result(
+        lint_result(
             "AZ319",
             Severity.WARNING,
             f"{prefix}: {val} is a {desc} range (typically not seen in public WAF traffic)",
@@ -1127,12 +1111,10 @@ def _check_redundant_cidrs(
 ) -> None:
     """AZ338: Detect overlapping CIDRs where one is a subnet of another.
 
-    Parses all valid CIDRs/IPs in *values*, groups by IP version, and checks
-    each pair for subnet_of relationships.  Invalid CIDRs are silently
-    skipped (AZ318 already reports them).
+    Uses find_overlapping_cidrs for O(n log n) sweep-line detection across
+    both IPv4 and IPv6. Invalid CIDRs are silently skipped (AZ318 reports them).
     """
-    v4_nets: list[tuple[str, ipaddress.IPv4Network]] = []
-    v6_nets: list[tuple[str, ipaddress.IPv6Network]] = []
+    items: list[tuple[str, ipaddress.IPv4Network | ipaddress.IPv6Network]] = []
 
     for val in values:
         if not isinstance(val, str):
@@ -1145,43 +1127,25 @@ def _check_redundant_cidrs(
                 net = ipaddress.ip_network(val + suffix, strict=False)
         except ValueError:
             continue  # AZ318 handles invalid CIDRs
+        items.append((val, net))
 
-        if isinstance(net, ipaddress.IPv4Network):
-            v4_nets.append((val, net))
-        else:
-            v6_nets.append((val, net))
-
-    for group in (v4_nets, v6_nets):
-        for i, (raw_a, net_a) in enumerate(group):
-            for raw_b, net_b in group[i + 1 :]:
-                if net_a == net_b:
-                    continue  # AZ334 handles exact duplicates
-                if net_b.subnet_of(net_a):
-                    results.append(
-                        _result(
-                            "AZ338",
-                            Severity.WARNING,
-                            f"{prefix}: redundant CIDR in matchValue:"
-                            f" {raw_b} is a subnet of {raw_a}",
-                            phase,
-                            ref=ref,
-                            field=f"{prefix}.matchValue",
-                        )
-                    )
-                    return  # One warning per condition
-                if net_a.subnet_of(net_b):
-                    results.append(
-                        _result(
-                            "AZ338",
-                            Severity.WARNING,
-                            f"{prefix}: redundant CIDR in matchValue:"
-                            f" {raw_a} is a subnet of {raw_b}",
-                            phase,
-                            ref=ref,
-                            field=f"{prefix}.matchValue",
-                        )
-                    )
-                    return  # One warning per condition
+    # find_overlapping_cidrs returns all (value, net, parent_value, parent_net) tuples
+    # where net is contained in or equal to parent_net. Report only the first.
+    for val, net, parent_val, parent_net in find_overlapping_cidrs(items):
+        if net == parent_net:
+            # Exact duplicate (AZ334 handles this, but report for completeness)
+            continue
+        results.append(
+            lint_result(
+                "AZ338",
+                Severity.WARNING,
+                f"{prefix}: redundant CIDR in matchValue: {val} is a subnet of {parent_val}",
+                phase,
+                ref=ref,
+                field=f"{prefix}.matchValue",
+            )
+        )
+        return  # One warning per condition
 
 
 def _check_duplicate_variable_operator(
@@ -1207,7 +1171,7 @@ def _check_duplicate_variable_operator(
     for (var, op), count in seen.items():
         if count > 1:
             results.append(
-                _result(
+                lint_result(
                     "AZ336",
                     Severity.WARNING,
                     f"Multiple conditions use {var}+{op} (AND logic = intersection,"
@@ -1236,7 +1200,7 @@ def _check_rate_fields_on_match_rule(
             rate_fields.append("groupBy")
     if rate_fields:
         results.append(
-            _result(
+            lint_result(
                 "AZ411",
                 Severity.WARNING,
                 f"Rate-limit fields ({', '.join(rate_fields)}) on a MatchRule"
@@ -1258,7 +1222,7 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
     duration = rule.get("rateLimitDurationInMinutes")
     if duration is None:
         results.append(
-            _result(
+            lint_result(
                 "AZ400",
                 Severity.ERROR,
                 "RateLimitRule missing 'rateLimitDurationInMinutes'",
@@ -1267,9 +1231,9 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
                 field="rateLimitDurationInMinutes",
             )
         )
-    elif not _is_strict_int(duration) or duration not in _VALID_RATE_DURATIONS:
+    elif not is_strict_int(duration) or duration not in _VALID_RATE_DURATIONS:
         results.append(
-            _result(
+            lint_result(
                 "AZ400",
                 Severity.ERROR,
                 f"Invalid rateLimitDurationInMinutes: {duration!r}",
@@ -1284,7 +1248,7 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
     threshold = rule.get("rateLimitThreshold")
     if threshold is None:
         results.append(
-            _result(
+            lint_result(
                 "AZ401",
                 Severity.ERROR,
                 "RateLimitRule missing 'rateLimitThreshold'",
@@ -1293,9 +1257,9 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
                 field="rateLimitThreshold",
             )
         )
-    elif not _is_strict_int(threshold):
+    elif not is_strict_int(threshold):
         results.append(
-            _result(
+            lint_result(
                 "AZ401",
                 Severity.ERROR,
                 f"rateLimitThreshold must be an integer, got {type(threshold).__name__}",
@@ -1306,7 +1270,7 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
         )
     elif threshold < _RATE_THRESHOLD_MIN:
         results.append(
-            _result(
+            lint_result(
                 "AZ403",
                 Severity.ERROR,
                 f"rateLimitThreshold ({threshold}) below minimum of {_RATE_THRESHOLD_MIN}",
@@ -1324,7 +1288,7 @@ def _check_rate_limit(rule: dict, results: list[LintResult], phase: str, ref: st
                 var_name = entry.get("variableName", "")
                 if var_name not in _VALID_GROUP_BY_VARIABLES:
                     results.append(
-                        _result(
+                        lint_result(
                             "AZ402",
                             Severity.ERROR,
                             f"Invalid groupBy variable {var_name!r}",
@@ -1345,7 +1309,7 @@ def _check_enabled_state(rule: dict, results: list[LintResult], phase: str, ref:
         return  # Optional field
     if enabled_state not in _VALID_ENABLED_STATES:
         results.append(
-            _result(
+            lint_result(
                 "AZ005",
                 Severity.ERROR,
                 f"Invalid enabledState {enabled_state!r}",
@@ -1357,7 +1321,7 @@ def _check_enabled_state(rule: dict, results: list[LintResult], phase: str, ref:
         )
     elif enabled_state == "Disabled":
         results.append(
-            _result(
+            lint_result(
                 "AZ600",
                 Severity.INFO,
                 "Rule is disabled (enabledState: Disabled)",
@@ -1376,7 +1340,7 @@ def _check_rule_type(rule: dict, results: list[LintResult], phase: str, ref: str
     _check_whitespace_structural_field("ruleType", rule_type, results, phase, ref)
     if rule_type not in _VALID_RULE_TYPES:
         results.append(
-            _result(
+            lint_result(
                 "AZ006",
                 Severity.ERROR,
                 f"Invalid ruleType {rule_type!r}",
@@ -1392,7 +1356,7 @@ def _check_action_log(rule: dict, results: list[LintResult], phase: str, ref: st
     """AZ601: Info when action is Log (doesn't block or allow)."""
     if rule.get("action") == "Log":
         results.append(
-            _result(
+            lint_result(
                 "AZ601",
                 Severity.INFO,
                 "Log action does not block or allow -- traffic continues to next rule",
@@ -1408,7 +1372,7 @@ def _check_unknown_fields(rule: dict, results: list[LintResult], phase: str, ref
     for key in rule:
         if key not in _VALID_RULE_FIELDS:
             results.append(
-                _result(
+                lint_result(
                     "AZ020",
                     Severity.WARNING,
                     f"Unknown top-level rule field {key!r}",
@@ -1428,7 +1392,7 @@ def _check_duplicate_priorities(
     """AZ101: Duplicate priorities."""
     for priority, refs in find_duplicate_priorities(seen):
         results.append(
-            _result(
+            lint_result(
                 "AZ101",
                 Severity.ERROR,
                 f"Duplicate priority {priority}: {', '.join(refs)}",
@@ -1442,7 +1406,7 @@ def _check_duplicate_refs(seen: dict[str, int], results: list[LintResult], phase
     for ref, count in sorted(seen.items()):
         if count > 1 and ref:
             results.append(
-                _result(
+                lint_result(
                     "AZ022",
                     Severity.ERROR,
                     f"Duplicate ref {ref!r} appears {count} times",
@@ -1457,7 +1421,7 @@ def _check_priority_gaps(seen: dict[int, list[str]], results: list[LintResult], 
     gap = find_first_priority_gap(seen.keys())
     if gap is not None:
         results.append(
-            _result(
+            lint_result(
                 "AZ102",
                 Severity.INFO,
                 f"Non-contiguous priorities: gap between {gap[0]} and {gap[1]}",
@@ -1512,7 +1476,7 @@ def _check_catch_all_and_dead_rules(
         if not isinstance(rule, dict):
             continue
         priority = rule.get("priority")
-        if _is_strict_int(priority) and priority >= 1:
+        if is_strict_int(priority) and priority >= 1:
             priority_rules.append((priority, rule))
     priority_rules.sort(key=lambda x: x[0])
 
@@ -1525,7 +1489,7 @@ def _check_catch_all_and_dead_rules(
 
         if first_catch_all_priority is not None and priority > first_catch_all_priority:
             results.append(
-                _result(
+                lint_result(
                     "AZ341",
                     Severity.WARNING,
                     f"Rule is unreachable: catch-all rule {first_catch_all_ref!r}"
@@ -1538,7 +1502,7 @@ def _check_catch_all_and_dead_rules(
 
         if _is_catch_all_rule(rule) and action in _TERMINAL_ACTIONS:
             results.append(
-                _result(
+                lint_result(
                     "AZ340",
                     Severity.WARNING,
                     f"Catch-all rule matches all traffic with action {action!r}",
@@ -1561,7 +1525,7 @@ def _check_rate_without_condition(
         return
     if _is_catch_all_rule(rule):
         results.append(
-            _result(
+            lint_result(
                 "AZ410",
                 Severity.WARNING,
                 "RateLimitRule matches all traffic (all conditions use Any operator);"
@@ -1582,7 +1546,7 @@ def _check_all_disabled(rules: list[dict], results: list[LintResult], phase: str
         return
     if all(r.get("enabledState") == "Disabled" for r in valid_rules):
         results.append(
-            _result(
+            lint_result(
                 "AZ602",
                 Severity.WARNING,
                 f"All {len(valid_rules)} rules in phase are disabled",
@@ -1601,7 +1565,7 @@ def _check_allow_bypasses_managed(rules: list[dict], results: list[LintResult], 
         if _is_catch_all_rule(rule):
             ref = str(rule.get("ref", ""))
             results.append(
-                _result(
+                lint_result(
                     "AZ603",
                     Severity.INFO,
                     "Allow catch-all rule bypasses all managed rules (OWASP DRS, bot protection)",
@@ -1705,7 +1669,7 @@ def _check_cross_rule_cidr_overlaps(
                                 f" {parent_ref!r}"
                             )
                         results.append(
-                            _result(
+                            lint_result(
                                 "AZ339",
                                 Severity.WARNING,
                                 msg,
@@ -1736,7 +1700,7 @@ def validate_rules(rules: list[dict], *, phase: str = "") -> list[LintResult]:
 
     for rule in rules:
         if not isinstance(rule, dict):
-            results.append(_result("AZ023", Severity.ERROR, "Rule entry is not a dict", phase))
+            results.append(lint_result("AZ023", Severity.ERROR, "Rule entry is not a dict", phase))
             continue
 
         ref = _check_ref(rule, results, phase)
@@ -1805,7 +1769,9 @@ def _check_managed_ref(rule: dict, results: list[LintResult], phase: str) -> str
     ref = rule.get("ref")
     if ref is None or ref == "":
         results.append(
-            _result("AZ700", Severity.ERROR, "Managed rule set missing 'ref'", phase, field="ref")
+            lint_result(
+                "AZ700", Severity.ERROR, "Managed rule set missing 'ref'", phase, field="ref"
+            )
         )
         return ""
     return str(ref)
@@ -1816,7 +1782,7 @@ def _check_rule_set_type(rule: dict, results: list[LintResult], phase: str, ref:
     rst = rule.get("ruleSetType")
     if rst is None or rst == "":
         results.append(
-            _result(
+            lint_result(
                 "AZ701",
                 Severity.ERROR,
                 "Managed rule set missing 'ruleSetType'",
@@ -1828,7 +1794,7 @@ def _check_rule_set_type(rule: dict, results: list[LintResult], phase: str, ref:
         return
     if not isinstance(rst, str):
         results.append(
-            _result(
+            lint_result(
                 "AZ701",
                 Severity.ERROR,
                 f"ruleSetType must be a string, got {type(rst).__name__}",
@@ -1840,7 +1806,7 @@ def _check_rule_set_type(rule: dict, results: list[LintResult], phase: str, ref:
         return
     if rst not in _VALID_RULE_SET_TYPES:
         results.append(
-            _result(
+            lint_result(
                 "AZ701",
                 Severity.WARNING,
                 f"Unknown ruleSetType {rst!r}",
@@ -1857,7 +1823,7 @@ def _check_rule_set_version(rule: dict, results: list[LintResult], phase: str, r
     ver = rule.get("ruleSetVersion")
     if ver is None or ver == "":
         results.append(
-            _result(
+            lint_result(
                 "AZ701",
                 Severity.ERROR,
                 "Managed rule set missing 'ruleSetVersion'",
@@ -1869,7 +1835,7 @@ def _check_rule_set_version(rule: dict, results: list[LintResult], phase: str, r
         return
     if not isinstance(ver, str):
         results.append(
-            _result(
+            lint_result(
                 "AZ701",
                 Severity.ERROR,
                 f"ruleSetVersion must be a string, got {type(ver).__name__}",
@@ -1888,7 +1854,7 @@ def _check_rule_set_action(rule: dict, results: list[LintResult], phase: str, re
     waf_type = _WAF_TYPE.get()
     if waf_type == "app_gateway":
         results.append(
-            _result(
+            lint_result(
                 "AZ705",
                 Severity.WARNING,
                 "ruleSetAction is only supported on Front Door, not Application Gateway",
@@ -1900,7 +1866,7 @@ def _check_rule_set_action(rule: dict, results: list[LintResult], phase: str, re
         return
     if not isinstance(action, str) or action not in _VALID_RULE_SET_ACTIONS:
         results.append(
-            _result(
+            lint_result(
                 "AZ702",
                 Severity.ERROR,
                 f"Invalid ruleSetAction {action!r}",
@@ -1921,7 +1887,7 @@ def _check_managed_enabled_state(
         return
     if state not in _VALID_ENABLED_STATES:
         results.append(
-            _result(
+            lint_result(
                 "AZ703",
                 Severity.ERROR,
                 f"{path}: invalid enabledState {state!r}",
@@ -1945,7 +1911,7 @@ def _check_managed_rule_override(
     rule_id = override.get("ruleId")
     if rule_id is None or rule_id == "":
         results.append(
-            _result(
+            lint_result(
                 "AZ706",
                 Severity.ERROR,
                 f"{path}: missing or empty ruleId",
@@ -1956,7 +1922,7 @@ def _check_managed_rule_override(
         )
     elif not isinstance(rule_id, str):
         results.append(
-            _result(
+            lint_result(
                 "AZ706",
                 Severity.ERROR,
                 f"{path}: ruleId must be a string, got {type(rule_id).__name__}",
@@ -1974,7 +1940,7 @@ def _check_managed_rule_override(
     if action is not None:
         if not isinstance(action, str) or action not in _VALID_OVERRIDE_ACTIONS:
             results.append(
-                _result(
+                lint_result(
                     "AZ707",
                     Severity.ERROR,
                     f"{path}: invalid action {action!r}",
@@ -1987,7 +1953,7 @@ def _check_managed_rule_override(
         # AZ708: FD-only override action used with App Gateway
         elif _WAF_TYPE.get() == "app_gateway" and action in _FD_ONLY_OVERRIDE_ACTIONS:
             results.append(
-                _result(
+                lint_result(
                     "AZ708",
                     Severity.WARNING,
                     f"{path}: action {action!r} is only supported on"
@@ -2008,7 +1974,7 @@ def _check_rule_group_overrides(
         return  # Optional
     if not isinstance(overrides, list):
         results.append(
-            _result(
+            lint_result(
                 "AZ704",
                 Severity.ERROR,
                 f"ruleGroupOverrides must be a list, got {type(overrides).__name__}",
@@ -2021,7 +1987,7 @@ def _check_rule_group_overrides(
     for i, group in enumerate(overrides):
         if not isinstance(group, dict):
             results.append(
-                _result(
+                lint_result(
                     "AZ704",
                     Severity.ERROR,
                     f"ruleGroupOverrides[{i}] must be a dict, got {type(group).__name__}",
@@ -2034,7 +2000,7 @@ def _check_rule_group_overrides(
         name = group.get("ruleGroupName")
         if not isinstance(name, str) or not name:
             results.append(
-                _result(
+                lint_result(
                     "AZ704",
                     Severity.ERROR,
                     f"ruleGroupOverrides[{i}]: missing or empty ruleGroupName",
@@ -2048,7 +2014,7 @@ def _check_rule_group_overrides(
         if rules_list is not None:
             if not isinstance(rules_list, list):
                 results.append(
-                    _result(
+                    lint_result(
                         "AZ704",
                         Severity.ERROR,
                         f"ruleGroupOverrides[{i}].rules must be a list,"
@@ -2091,7 +2057,7 @@ def validate_managed_rules(rules: list[dict], *, phase: str = "") -> list[LintRe
     for ref, count in sorted(seen_refs.items()):
         if count > 1 and ref:
             results.append(
-                _result(
+                lint_result(
                     "AZ700",
                     Severity.ERROR,
                     f"Duplicate managed rule set ref {ref!r} appears {count} times",

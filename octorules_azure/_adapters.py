@@ -21,6 +21,7 @@ import logging
 from typing import Any
 
 from octorules.config import ConfigError
+from octorules.provider.exceptions import ProviderError
 from octorules.provider.utils import denormalize_fields, normalize_fields, to_plain_dict
 
 log = logging.getLogger(__name__)
@@ -206,7 +207,7 @@ class FrontDoorAdapter:
         overrides = d.get("rule_group_overrides")
         if isinstance(overrides, list) and overrides:
             result["ruleGroupOverrides"] = [
-                _normalise_fd_rule_group_override(to_plain_dict(o)) for o in overrides
+                _normalise_rule_group_override(to_plain_dict(o)) for o in overrides
             ]
         return result
 
@@ -223,12 +224,20 @@ class FrontDoorAdapter:
             d["exclusions"] = list(exclusions)
         overrides = rule.get("ruleGroupOverrides")
         if isinstance(overrides, list) and overrides:
-            d["rule_group_overrides"] = [_denormalise_fd_rule_group_override(o) for o in overrides]
+            d["rule_group_overrides"] = [_denormalise_rule_group_override(o) for o in overrides]
         return d
 
 
-def _normalise_fd_rule_group_override(override: dict) -> dict:
-    """Normalise a Front Door rule group override to canonical form."""
+def _normalise_rule_group_override(
+    override: dict, enabled_state_field: str = "enabled_state"
+) -> dict:
+    """Normalise a rule group override to canonical form (shared FD/AG logic).
+
+    Args:
+        override: SDK rule group override dict.
+        enabled_state_field: Source field name for enabledState in rules
+            ("enabled_state" for FD, "state" for AG).
+    """
     result: dict[str, Any] = {}
     result["ruleGroupName"] = override.get("rule_group_name", "")
     exclusions = override.get("exclusions")
@@ -236,15 +245,24 @@ def _normalise_fd_rule_group_override(override: dict) -> dict:
         result["exclusions"] = [to_plain_dict(e) for e in exclusions]
     rules = override.get("rules")
     if isinstance(rules, list) and rules:
-        result["rules"] = [_normalise_fd_rule_override(to_plain_dict(r)) for r in rules]
+        result["rules"] = [
+            _normalise_rule_override(to_plain_dict(r), enabled_state_field=enabled_state_field)
+            for r in rules
+        ]
     return result
 
 
-def _normalise_fd_rule_override(rule: dict) -> dict:
-    """Normalise a Front Door managed rule override entry."""
+def _normalise_rule_override(rule: dict, enabled_state_field: str = "enabled_state") -> dict:
+    """Normalise a managed rule override entry.
+
+    Args:
+        rule: SDK rule override dict.
+        enabled_state_field: Source field name for enabledState
+            ("enabled_state" for FD, "state" for AG).
+    """
     result: dict[str, Any] = {}
     result["ruleId"] = rule.get("rule_id", "")
-    result["enabledState"] = rule.get("enabled_state", "Enabled")
+    result["enabledState"] = rule.get(enabled_state_field, "Enabled")
     action = rule.get("action")
     if action is not None:
         result["action"] = action
@@ -254,8 +272,16 @@ def _normalise_fd_rule_override(rule: dict) -> dict:
     return result
 
 
-def _denormalise_fd_rule_group_override(override: dict) -> dict:
-    """Denormalise a canonical rule group override to Front Door SDK format."""
+def _denormalise_rule_group_override(
+    override: dict, enabled_state_field: str = "enabled_state"
+) -> dict:
+    """Denormalise a canonical rule group override to SDK format (shared FD/AG logic).
+
+    Args:
+        override: Canonical rule group override dict.
+        enabled_state_field: Target field name for enabledState in rules
+            ("enabled_state" for FD, "state" for AG).
+    """
     result: dict[str, Any] = {}
     result["rule_group_name"] = override.get("ruleGroupName", "")
     exclusions = override.get("exclusions")
@@ -263,15 +289,23 @@ def _denormalise_fd_rule_group_override(override: dict) -> dict:
         result["exclusions"] = list(exclusions)
     rules = override.get("rules")
     if isinstance(rules, list) and rules:
-        result["rules"] = [_denormalise_fd_rule_override(r) for r in rules]
+        result["rules"] = [
+            _denormalise_rule_override(r, enabled_state_field=enabled_state_field) for r in rules
+        ]
     return result
 
 
-def _denormalise_fd_rule_override(rule: dict) -> dict:
-    """Denormalise a canonical managed rule override to Front Door SDK format."""
+def _denormalise_rule_override(rule: dict, enabled_state_field: str = "enabled_state") -> dict:
+    """Denormalise a canonical managed rule override to SDK format.
+
+    Args:
+        rule: Canonical rule override dict.
+        enabled_state_field: Target field name for enabledState
+            ("enabled_state" for FD, "state" for AG).
+    """
     result: dict[str, Any] = {}
     result["rule_id"] = rule.get("ruleId", "")
-    result["enabled_state"] = rule.get("enabledState", "Enabled")
+    result[enabled_state_field] = rule.get("enabledState", "Enabled")
     action = rule.get("action")
     if action is not None:
         result["action"] = action
@@ -279,6 +313,11 @@ def _denormalise_fd_rule_override(rule: dict) -> dict:
     if isinstance(exclusions, list) and exclusions:
         result["exclusions"] = list(exclusions)
     return result
+
+
+# Backward compatibility aliases for Front Door (use the shared functions)
+_normalise_fd_rule_group_override = _normalise_rule_group_override
+_denormalise_fd_rule_group_override = _denormalise_rule_group_override
 
 
 def _normalise_fd_top_level(d: dict) -> dict:
@@ -451,10 +490,12 @@ class AppGatewayAdapter:
         if isinstance(exclusions, list) and exclusions:
             result["exclusions"] = [to_plain_dict(e) for e in exclusions]
         # Normalize rule group overrides
+        # AG uses "state" instead of "enabled_state"
         overrides = d.get("rule_group_overrides")
         if isinstance(overrides, list) and overrides:
             result["ruleGroupOverrides"] = [
-                _normalise_ag_rule_group_override(to_plain_dict(o)) for o in overrides
+                _normalise_rule_group_override(to_plain_dict(o), enabled_state_field="state")
+                for o in overrides
             ]
         return result
 
@@ -469,68 +510,27 @@ class AppGatewayAdapter:
             d["exclusions"] = list(exclusions)
         overrides = rule.get("ruleGroupOverrides")
         if isinstance(overrides, list) and overrides:
-            d["rule_group_overrides"] = [_denormalise_ag_rule_group_override(o) for o in overrides]
+            # AG uses "state" instead of "enabled_state"
+            d["rule_group_overrides"] = [
+                _denormalise_rule_group_override(o, enabled_state_field="state") for o in overrides
+            ]
         return d
 
 
 def _normalise_ag_rule_group_override(override: dict) -> dict:
-    """Normalise an App Gateway rule group override to canonical form."""
-    result: dict[str, Any] = {}
-    result["ruleGroupName"] = override.get("rule_group_name", "")
-    exclusions = override.get("exclusions")
-    if isinstance(exclusions, list) and exclusions:
-        result["exclusions"] = [to_plain_dict(e) for e in exclusions]
-    rules = override.get("rules")
-    if isinstance(rules, list) and rules:
-        result["rules"] = [_normalise_ag_rule_override(to_plain_dict(r)) for r in rules]
-    return result
+    """Normalise an App Gateway rule group override to canonical form.
 
-
-def _normalise_ag_rule_override(rule: dict) -> dict:
-    """Normalise an App Gateway managed rule override entry.
-
-    AG uses ``state`` -> normalise to ``enabledState``.
+    This is a convenience wrapper that passes the AG-specific "state" parameter.
     """
-    result: dict[str, Any] = {}
-    result["ruleId"] = rule.get("rule_id", "")
-    result["enabledState"] = rule.get("state", "Enabled")
-    action = rule.get("action")
-    if action is not None:
-        result["action"] = action
-    exclusions = rule.get("exclusions")
-    if isinstance(exclusions, list) and exclusions:
-        result["exclusions"] = [to_plain_dict(e) for e in exclusions]
-    return result
+    return _normalise_rule_group_override(override, enabled_state_field="state")
 
 
 def _denormalise_ag_rule_group_override(override: dict) -> dict:
-    """Denormalise a canonical rule group override to App Gateway SDK format."""
-    result: dict[str, Any] = {}
-    result["rule_group_name"] = override.get("ruleGroupName", "")
-    exclusions = override.get("exclusions")
-    if isinstance(exclusions, list) and exclusions:
-        result["exclusions"] = list(exclusions)
-    rules = override.get("rules")
-    if isinstance(rules, list) and rules:
-        result["rules"] = [_denormalise_ag_rule_override(r) for r in rules]
-    return result
+    """Denormalise a canonical rule group override to App Gateway SDK format.
 
-
-def _denormalise_ag_rule_override(rule: dict) -> dict:
-    """Denormalise a canonical managed rule override to App Gateway SDK format.
-
-    Canonical ``enabledState`` -> AG ``state``.
+    This is a convenience wrapper that passes the AG-specific "state" parameter.
     """
-    result: dict[str, Any] = {}
-    result["rule_id"] = rule.get("ruleId", "")
-    result["state"] = rule.get("enabledState", "Enabled")
-    action = rule.get("action")
-    if action is not None:
-        result["action"] = action
-    exclusions = rule.get("exclusions")
-    if isinstance(exclusions, list) and exclusions:
-        result["exclusions"] = list(exclusions)
-    return result
+    return _denormalise_rule_group_override(override, enabled_state_field="state")
 
 
 def _normalise_ag_condition(c: dict) -> dict:
@@ -661,8 +661,10 @@ def _denormalise_ag_top_level(d: dict) -> dict:
         minutes = d["rateLimitDurationInMinutes"]
         duration = _MINUTES_TO_AG_DURATION.get(minutes)
         if duration is None:
-            log.warning("Unknown rateLimitDurationInMinutes %r, defaulting to FiveMins", minutes)
-            duration = "FiveMins"
+            raise ProviderError(
+                f"Invalid rateLimitDurationInMinutes {minutes!r};"
+                f" valid values: {sorted(_MINUTES_TO_AG_DURATION.keys())}"
+            )
         out["rate_limit_duration"] = duration
 
     # groupBy -> group_by_user_session

@@ -351,6 +351,17 @@ class TestTotalRuleCount:
         azure_lint(rules_data, ctx)
         assert_no_lint(ctx, "AZ501")
 
+    def test_non_dict_entries_count_toward_limit(self):
+        """Every list entry consumes a policy slot — malformed items included."""
+        rules_data = {
+            "azure_waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 100)]
+            + ["junk", "more-junk"],
+        }
+        # 99 dicts + 2 non-dicts = 101 entries > 100
+        ctx = LintContext()
+        azure_lint(rules_data, ctx)
+        assert_lint(ctx, "AZ501")
+
     def test_managed_rules_excluded_from_count(self):
         """AZ501 must not count managed rule sets toward the 100-custom-rule limit."""
         rules_data = {

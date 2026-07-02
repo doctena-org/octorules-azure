@@ -252,7 +252,8 @@ class AzureWafProvider:
             except _NO_RETRY as e:
                 raise _NonRetryableError(e) from e
             except HttpResponseError as e:
-                if e.status_code and e.status_code not in _RETRYABLE_STATUS_CODES:
+                # None status_code (connection error) is deliberately retryable.
+                if e.status_code is not None and e.status_code not in _RETRYABLE_STATUS_CODES:
                     raise _NonRetryableError(e) from e
                 raise  # retryable status codes fall through to retry
 
