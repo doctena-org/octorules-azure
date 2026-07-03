@@ -30,7 +30,7 @@ classifiers = [
 dependencies = [
     "octorules>=0.30.0",
     "azure-identity>=1.14,<2.0",
-    "azure-mgmt-frontdoor>=1.1,<2.0",
+    "azure-mgmt-frontdoor>=1.1,<3.0",
     "azure-mgmt-network>=25.0,<32.0",
 ]
 
