@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Zone files can nest all Azure WAF sections under a single `azure:` block; the flat spelling is deprecated.
+
 ### Changed
-- Minimum `octorules` dependency: `>=0.30.0`.
+- Minimum `octorules` dependency: `>=0.32.0`.
+- Policy settings module now uses the core `SettingsChange`/`SettingsPlan`/`SettingsFormatter` framework for plan formatting.
 
 ### Fixed
 - App Gateway adapter now raises `ProviderError` when denormalizing a rate-limit

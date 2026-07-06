@@ -315,11 +315,6 @@ def _denormalise_rule_override(rule: dict, enabled_state_field: str = "enabled_s
     return result
 
 
-# Backward compatibility aliases for Front Door (use the shared functions)
-_normalise_fd_rule_group_override = _normalise_rule_group_override
-_denormalise_fd_rule_group_override = _denormalise_rule_group_override
-
-
 def _normalise_fd_top_level(d: dict) -> dict:
     """Map Front Door SDK snake_case fields to canonical camelCase.
 

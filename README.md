@@ -78,6 +78,77 @@ The [`examples/`](examples/) directory contains a working single-provider
 `config.yaml` plus `rules/my-waf-policy.yaml` demonstrating every supported
 phase and key. Copy it as a starting point.
 
+### Nested format (recommended)
+
+All Azure WAF sections nest under a single `azure:` block:
+
+```yaml
+# rules/my-policy.yaml
+azure:
+  waf_custom_rules:
+    - ref: BlockBadIPs
+      priority: 1
+      action: Block
+      matchConditions:
+        - matchVariable: RemoteAddr
+          operator: IPMatch
+          matchValue:
+            - 192.168.1.0/24
+
+  waf_rate_rules:
+    - ref: RateLimitAPI
+      priority: 100
+      action: Block
+      ruleType: RateLimitRule
+      rateLimitDurationInMinutes: 1
+      rateLimitThreshold: 100
+      groupBy:
+        - variableName: SocketAddr
+      matchConditions:
+        - matchVariable: RequestUri
+          operator: BeginsWith
+          matchValue:
+            - /api/
+
+  waf_managed_rules:
+    - ref: Microsoft_DefaultRuleSet
+      ruleSetType: Microsoft_DefaultRuleSet
+      ruleSetVersion: "2.1"
+      ruleSetAction: Block
+
+  waf_policy_settings:
+    mode: Prevention
+    requestBodyCheck: Enabled
+
+  waf_managed_exclusions:
+    - matchVariable: RequestArgNames
+      selectorMatchOperator: Equals
+      selector: q
+```
+
+### Flat format (deprecated)
+
+The previous flat spelling is still supported but deprecated:
+
+```yaml
+# Flat format (deprecated)
+azure_waf_custom_rules:
+  - ref: BlockBadIPs
+    ...
+azure_waf_rate_rules:
+  - ref: RateLimitAPI
+    ...
+azure_waf_managed_rules:
+  - ref: Microsoft_DefaultRuleSet
+    ...
+azure_waf_policy_settings:
+  mode: Prevention
+  ...
+azure_waf_managed_exclusions:
+  - matchVariable: RequestArgNames
+    ...
+```
+
 ## Supported features
 
 | Feature | Status | Azure concept |

@@ -1,6 +1,11 @@
 """Azure WAF provider for octorules."""
 
-from octorules.phases import register_api_fields, register_non_phase_key, register_phases
+from octorules.phases import (
+    register_api_fields,
+    register_namespace,
+    register_non_phase_key,
+    register_phases,
+)
 
 from octorules_azure._phases import AZURE_PHASE_IDS, AZURE_PHASE_NAMES, AZURE_PHASES
 from octorules_azure.provider import AzureWafProvider
@@ -8,6 +13,18 @@ from octorules_azure.validate import validate_managed_rules, validate_rules
 
 register_phases(AZURE_PHASES)
 register_api_fields("rule", {"ruleType", "ruleSetType"})
+
+# Register namespace for nested zone-file format.
+register_namespace(
+    "azure",
+    {
+        "waf_custom_rules": "azure_waf_custom_rules",
+        "waf_rate_rules": "azure_waf_rate_rules",
+        "waf_managed_rules": "azure_waf_managed_rules",
+        "waf_policy_settings": "azure_waf_policy_settings",
+        "waf_managed_exclusions": "azure_waf_managed_exclusions",
+    },
+)
 
 from octorules_azure.linter import register_azure_linter  # noqa: E402
 

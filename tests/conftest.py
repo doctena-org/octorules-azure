@@ -4,6 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# Ensure octorules_azure is imported so that phases and namespaces are registered
+import octorules_azure  # noqa: F401
+
 
 @pytest.fixture
 def mock_fd_client():

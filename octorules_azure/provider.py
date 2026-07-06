@@ -126,6 +126,7 @@ class AzureWafProvider:
     between Front Door WAF and Application Gateway WAF.
     """
 
+    NAMESPACE = "azure"
     SUPPORTS = frozenset({"zone_discovery"})
 
     def __init__(
