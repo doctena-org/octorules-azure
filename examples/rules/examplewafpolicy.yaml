@@ -1,4 +1,4 @@
-# Azure WAF rules for policy "my-waf-policy"
+# Azure WAF rules for policy "examplewafpolicy"
 #
 # Azure WAF supports Front Door and Application Gateway.  Set waf_type in
 # config.yaml to choose which.  Rules use matchConditions with operators

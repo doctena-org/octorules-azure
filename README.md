@@ -31,15 +31,15 @@ providers:
     directory: ./rules
 
 zones:
-  api-gateway-waf-policy:
+  apiwafpolicy:
     sources:
       - rules
-  corporate-site-waf-policy:
+  websitewafpolicy:
     sources:
       - rules
 ```
 
-Each zone name maps to an Azure WAF policy name. The provider resolves policy names at runtime. The `env/` prefix resolves values from environment variables at runtime. All keys under the provider section are forwarded to the provider constructor as keyword arguments (octodns-style passthrough).
+Each zone name maps to an Azure WAF policy name. The provider resolves policy names at runtime. Front Door WAF policy names allow only alphanumerics and must start with a letter; Application Gateway policy names also allow hyphens, periods, and underscores. The `env/` prefix resolves values from environment variables at runtime. All keys under the provider section are forwarded to the provider constructor as keyword arguments (octodns-style passthrough).
 
 ### Provider settings
 
@@ -75,7 +75,7 @@ Safety thresholds are configured under `safety:` (framework-owned, not forwarded
 ## Examples
 
 The [`examples/`](examples/) directory contains a working single-provider
-`config.yaml` plus `rules/my-waf-policy.yaml` demonstrating every supported
+`config.yaml` plus `rules/examplewafpolicy.yaml` demonstrating every supported
 phase and key. Copy it as a starting point.
 
 ### Nested format (recommended)
@@ -83,7 +83,7 @@ phase and key. Copy it as a starting point.
 All Azure WAF sections nest under a single `azure:` block:
 
 ```yaml
-# rules/my-policy.yaml
+# rules/examplewafpolicy.yaml
 azure:
   waf_custom_rules:
     - ref: BlockBadIPs
@@ -126,29 +126,6 @@ azure:
       selector: q
 ```
 
-### Flat format (deprecated)
-
-The previous flat spelling is still supported but deprecated:
-
-```yaml
-# Flat format (deprecated)
-azure_waf_custom_rules:
-  - ref: BlockBadIPs
-    ...
-azure_waf_rate_rules:
-  - ref: RateLimitAPI
-    ...
-azure_waf_managed_rules:
-  - ref: Microsoft_DefaultRuleSet
-    ...
-azure_waf_policy_settings:
-  mode: Prevention
-  ...
-azure_waf_managed_exclusions:
-  - matchVariable: RequestArgNames
-    ...
-```
-
 ## Supported features
 
 | Feature | Status | Azure concept |
@@ -164,9 +141,9 @@ azure_waf_managed_exclusions:
 
 | Phase | Rule Type | Description |
 |---|---|---|
-| `azure_waf_custom_rules` | `MatchRule` | Standard WAF rules (IP blocks, geo-blocks, header checks, etc.) |
-| `azure_waf_rate_rules` | `RateLimitRule` | Rate limiting rules with threshold, duration, and grouping |
-| `azure_waf_managed_rules` | Managed | OWASP DRS, Bot Protection rule sets with overrides and exclusions |
+| `azure.waf_custom_rules` | `MatchRule` | Standard WAF rules (IP blocks, geo-blocks, header checks, etc.) |
+| `azure.waf_rate_rules` | `RateLimitRule` | Rate limiting rules with threshold, duration, and grouping |
+| `azure.waf_managed_rules` | Managed | OWASP DRS, Bot Protection rule sets with overrides and exclusions |
 
 ## Rule format
 
@@ -175,76 +152,78 @@ The same YAML format works for both Front Door and Application Gateway. The adap
 ### Custom rules
 
 ```yaml
-# rules/api-gateway-waf-policy.yaml
-azure_waf_custom_rules:
-  # Block specific IP ranges
-  - ref: BlockBadIPs
-    priority: 1
-    action: Block
-    matchConditions:
-      - matchVariable: RemoteAddr
-        operator: IPMatch
-        matchValue:
-          - 192.168.1.0/24
-          - 10.0.0.0/8
+# rules/examplewafpolicy.yaml
+azure:
+  waf_custom_rules:
+    # Block specific IP ranges
+    - ref: BlockBadIPs
+      priority: 1
+      action: Block
+      matchConditions:
+        - matchVariable: RemoteAddr
+          operator: IPMatch
+          matchValue:
+            - 192.168.1.0/24
+            - 10.0.0.0/8
 
-  # Block requests with suspicious user-agent
-  - ref: BlockBadUserAgents
-    priority: 2
-    action: Block
-    matchConditions:
-      - matchVariable: RequestHeader
-        selector: User-Agent
-        operator: Contains
-        matchValue:
-          - evilbot
-          - scanner
-        transforms:
-          - Lowercase
+    # Block requests with suspicious user-agent
+    - ref: BlockBadUserAgents
+      priority: 2
+      action: Block
+      matchConditions:
+        - matchVariable: RequestHeader
+          selector: User-Agent
+          operator: Contains
+          matchValue:
+            - evilbot
+            - scanner
+          transforms:
+            - Lowercase
 
-  # Geo-block: allow only US and CA
-  - ref: GeoBlock
-    priority: 3
-    action: Block
-    matchConditions:
-      - matchVariable: RemoteAddr
-        operator: GeoMatch
-        negateCondition: true
-        matchValue:
-          - US
-          - CA
+    # Geo-block: allow only US and CA
+    - ref: GeoBlock
+      priority: 3
+      action: Block
+      matchConditions:
+        - matchVariable: RemoteAddr
+          operator: GeoMatch
+          negateCondition: true
+          matchValue:
+            - US
+            - CA
 
-  # Block requests matching a regex pattern
-  - ref: BlockAdminPaths
-    priority: 4
-    action: Block
-    matchConditions:
-      - matchVariable: RequestUri
-        operator: RegEx
-        matchValue:
-          - "^/admin/.*\\.php$"
-        transforms:
-          - Lowercase
+    # Block requests matching a regex pattern
+    - ref: BlockAdminPaths
+      priority: 4
+      action: Block
+      matchConditions:
+        - matchVariable: RequestUri
+          operator: RegEx
+          matchValue:
+            - "^/admin/.*\\.php$"
+          transforms:
+            - Lowercase
 ```
 
 ### Rate-limit rules
 
 ```yaml
-azure_waf_rate_rules:
-  # Rate limit API endpoints to 100 requests per minute per client IP
-  - ref: RateLimitAPI
-    priority: 100
-    action: Block
-    ruleType: RateLimitRule
-    rateLimitDurationInMinutes: 1
-    rateLimitThreshold: 100
-    groupBy:
-      - variableName: SocketAddr
-    matchConditions:
-      - matchVariable: RequestUri
-        operator: BeginsWith
-        matchValue:
-          - /api/
+azure:
+  waf_rate_rules:
+    # Rate limit API endpoints to 100 requests per minute per client IP
+    - ref: RateLimitAPI
+      priority: 100
+      action: Block
+      ruleType: RateLimitRule
+      rateLimitDurationInMinutes: 1
+      rateLimitThreshold: 100
+      groupBy:
+        - variableName: SocketAddr
+      matchConditions:
+        - matchVariable: RequestUri
+          operator: BeginsWith
+          matchValue:
+            - /api/
 ```
 
 ### Rule fields reference

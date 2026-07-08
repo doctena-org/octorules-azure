@@ -448,31 +448,6 @@ class TestFormatHtml:
 
 
 # ---------------------------------------------------------------------------
-# Format extension -- format_report
-# ---------------------------------------------------------------------------
-class TestFormatReport:
-    def test_with_drift(self):
-        fmt = ManagedExclusionsFormatter()
-        plan = ManagedExclusionsPlan(current=[], desired=_SAMPLE_EXCLUSIONS)
-        phases_data: list[dict] = []
-        result = fmt.format_report([plan], zone_has_drift=False, phases_data=phases_data)
-        assert result is True
-        assert len(phases_data) == 1
-        entry = phases_data[0]
-        assert entry["phase"] == "managed_exclusions"
-        assert entry["provider_id"] == "azure_waf_managed_exclusions"
-        assert entry["status"] == "drifted"
-        assert entry["modifies"] == 1
-
-    def test_no_drift(self):
-        fmt = ManagedExclusionsFormatter()
-        phases_data: list[dict] = []
-        result = fmt.format_report([], zone_has_drift=False, phases_data=phases_data)
-        assert result is False
-        assert phases_data == []
-
-
-# ---------------------------------------------------------------------------
 # Provider methods
 # ---------------------------------------------------------------------------
 class TestProviderGetManagedExclusions:

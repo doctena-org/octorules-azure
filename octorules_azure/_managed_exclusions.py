@@ -232,27 +232,6 @@ class ManagedExclusionsFormatter:
             lines.append("</table>")
         return 0, 0, total_modifies, 0
 
-    def format_report(self, plans: list, zone_has_drift: bool, phases_data: list[dict]) -> bool:
-        total_modifies = 0
-        for plan in plans:
-            if isinstance(plan, ManagedExclusionsPlan) and plan.has_changes:
-                total_modifies += 1
-        if total_modifies:
-            zone_has_drift = True
-            phases_data.append(
-                {
-                    "phase": "managed_exclusions",
-                    "provider_id": "azure_waf_managed_exclusions",
-                    "status": "drifted",
-                    "yaml_rules": 0,
-                    "live_rules": 0,
-                    "adds": 0,
-                    "removes": 0,
-                    "modifies": total_modifies,
-                }
-            )
-        return zone_has_drift
-
 
 # ---------------------------------------------------------------------------
 # Registration

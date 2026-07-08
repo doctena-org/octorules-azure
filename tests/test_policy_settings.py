@@ -727,48 +727,6 @@ class TestFormatHtml:
 
 
 # ---------------------------------------------------------------------------
-# Format extension — format_report
-# ---------------------------------------------------------------------------
-class TestFormatReport:
-    def test_with_drift(self):
-        fmt = PolicySettingsFormatter()
-        plan = PolicySettingsPlan(
-            changes=[
-                PolicySettingsChange("mode", "Detection", "Prevention"),
-                PolicySettingsChange("enabled_state", "Enabled", "Disabled"),
-            ]
-        )
-        phases_data: list[dict] = []
-        result = fmt.format_report([plan], zone_has_drift=False, phases_data=phases_data)
-        assert result is True
-        assert len(phases_data) == 1
-        entry = phases_data[0]
-        assert entry["phase"] == "policy_settings"
-        assert entry["provider_id"] == "azure_waf_policy_settings"
-        assert entry["status"] == "drifted"
-        assert entry["modifies"] == 2
-        assert entry["adds"] == 0
-        assert entry["removes"] == 0
-
-    def test_preserves_incoming_drift(self):
-        fmt = PolicySettingsFormatter()
-        plan = PolicySettingsPlan(
-            changes=[PolicySettingsChange("mode", "Prevention", "Prevention")]
-        )
-        phases_data: list[dict] = []
-        result = fmt.format_report([plan], zone_has_drift=True, phases_data=phases_data)
-        assert result is True
-        assert phases_data == []
-
-    def test_no_drift(self):
-        fmt = PolicySettingsFormatter()
-        phases_data: list[dict] = []
-        result = fmt.format_report([], zone_has_drift=False, phases_data=phases_data)
-        assert result is False
-        assert phases_data == []
-
-
-# ---------------------------------------------------------------------------
 # Provider methods
 # ---------------------------------------------------------------------------
 class TestProviderGetPolicySettings:

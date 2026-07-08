@@ -51,7 +51,7 @@ manager:
       class: octorules.plan_output.PlanText
 
 zones:
-  my-waf-policy:
+  examplewafpolicy:
     sources:
       - rules
 

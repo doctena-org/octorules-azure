@@ -11,15 +11,16 @@ These rules are registered automatically when `octorules-azure` is installed. Th
 Add a `# octorules:disable=RULE` comment immediately before a rule to suppress a specific finding. Multiple rule IDs can be comma-separated.
 
 ```yaml
-azure_waf_custom_rules:
-  # octorules:disable=AZ319
+azure:
+  waf_custom_rules:
   - ref: AllowPrivate
     priority: 10
     action: Allow
     matchConditions:
-      - matchVariable: RemoteAddr
-        operator: IPMatch
-        matchValue: ["10.0.0.0/8"]
+    - matchVariable: RemoteAddr
+      operator: IPMatch
+      matchValue:
+      - 10.0.0.0/8
 ```
 
 **Multiple rules:**
@@ -134,10 +135,12 @@ Every rule must have a `ref` field (the rule name in Azure).
 **Triggers on:**
 
 ```yaml
-azure_waf_custom_rules:
+azure:
+  waf_custom_rules:
   - priority: 1
     action: Block
-    matchConditions: [...]
+    matchConditions:
+    - '...'
 ```
 
 **Fix:** Add a `ref` field:
@@ -297,13 +300,12 @@ behavior during sync.
 **Triggers on:**
 
 ```yaml
-azure_waf_custom_rules:
-  - ref: BlockIPs
-    priority: 1
-    ...
-  - ref: BlockIPs          # <-- duplicate
-    priority: 2
-    ...
+azure:
+  waf_custom_rules:
+    - ref: BlockIPs
+      priority: 1
+    - ref: BlockIPs          # <-- duplicate
+      priority: 2
 ```
 
 ---
@@ -318,8 +320,9 @@ element (e.g. a string or integer) is always an authoring mistake.
 **Triggers on:**
 
 ```yaml
-azure_waf_custom_rules:
-  - BlockBadIPs          # <-- string instead of mapping
+azure:
+  waf_custom_rules:
+  - BlockBadIPs
 ```
 
 **Fix:** Replace the scalar with a proper rule mapping.
@@ -337,17 +340,20 @@ rule entries under each phase.
 **Triggers on:**
 
 ```yaml
-azure_waf_custom_rules: "not a list"
+azure:
+  waf_custom_rules: not a list
 ```
 
 **Fix:** Use a proper list:
 
 ```yaml
-azure_waf_custom_rules:
+azure:
+  waf_custom_rules:
   - ref: BlockBadIPs
     priority: 1
     action: Block
-    matchConditions: [...]
+    matchConditions:
+    - '...'
 ```
 
 ---
@@ -1004,21 +1010,24 @@ under a second.
 **Triggers on:**
 
 ```yaml
-azure_waf_custom_rules:
+azure:
+  waf_custom_rules:
   - ref: blockKnownBad
     priority: 100
     action: Block
     matchConditions:
-      - matchVariable: RemoteAddr
-        operator: IPMatch
-        matchValue: ["10.0.0.0/8"]      # broader
+    - matchVariable: RemoteAddr
+      operator: IPMatch
+      matchValue:
+      - 10.0.0.0/8
   - ref: blockSpecificSubnet
     priority: 200
     action: Block
     matchConditions:
-      - matchVariable: RemoteAddr
-        operator: IPMatch
-        matchValue: ["10.1.2.0/24"]     # <-- never reached: shadowed by priority-100 rule
+    - matchVariable: RemoteAddr
+      operator: IPMatch
+      matchValue:
+      - 10.1.2.0/24
 ```
 
 **Fix:** Remove the narrower rule (the broader one already covers it),
@@ -1258,14 +1267,15 @@ not the intended behavior.
 **Triggers on:**
 
 ```yaml
-azure_waf_rate_rules:
+azure:
+  waf_rate_rules:
   - ref: RateLimitEverything
     ruleType: RateLimitRule
     rateLimitDurationInMinutes: 1
     rateLimitThreshold: 100
     matchConditions:
-      - matchVariable: RequestUri
-        operator: Any                # <-- matches everything
+    - matchVariable: RequestUri
+      operator: Any
 ```
 
 **Fix:** Add a meaningful condition (e.g., specific URI path, header).
@@ -1336,15 +1346,14 @@ cannot also be used in `azure_waf_rate_rules`.
 **Triggers on:**
 
 ```yaml
-azure_waf_custom_rules:
-  - ref: CustomRule1
-    priority: 5                      # <-- conflict
-    ...
+azure:
+  waf_custom_rules:
+    - ref: CustomRule1
+      priority: 5                      # <-- conflict
 
-azure_waf_rate_rules:
-  - ref: RateRule1
-    priority: 5                      # <-- same priority, different phase
-    ...
+  waf_rate_rules:
+    - ref: RateRule1
+      priority: 5                      # <-- same priority, different phase
 ```
 
 **Fix:** Use different priority values across phases.
@@ -1427,20 +1436,21 @@ refs indicate a copy-paste error.
 **Triggers on:**
 
 ```yaml
-azure_waf_managed_rules:
+azure:
+  waf_managed_rules:
   - ruleSetType: Microsoft_DefaultRuleSet
-    ruleSetVersion: "2.1"
-    # missing ref
+    ruleSetVersion: '2.1'
 ```
 
 ```yaml
-azure_waf_managed_rules:
+azure:
+  waf_managed_rules:
   - ref: Microsoft_DefaultRuleSet
     ruleSetType: Microsoft_DefaultRuleSet
-    ruleSetVersion: "2.1"
-  - ref: Microsoft_DefaultRuleSet     # <-- duplicate
+    ruleSetVersion: '2.1'
+  - ref: Microsoft_DefaultRuleSet
     ruleSetType: Microsoft_DefaultRuleSet
-    ruleSetVersion: "1.0"
+    ruleSetVersion: '1.0'
 ```
 
 **Fix:** Add a unique `ref` to each managed rule set entry.
@@ -1548,7 +1558,8 @@ Gateway does not support the `ruleSetAction` field -- it is Front Door only.
 
 ```yaml
 # config.yaml: waf_type: app_gateway
-azure_waf_managed_rules:
+azure:
+  waf_managed_rules:
   - ref: OWASP_CRS
     ruleSetType: OWASP_CRS
     ruleSetVersion: "3.2"
@@ -1609,15 +1620,16 @@ Fires when a Front Door-only override action is used with `waf_type: app_gateway
 **Triggers on:**
 
 ```yaml
-azure_waf_managed_rules:
+azure:
+  waf_managed_rules:
   - ref: DefaultRuleSet
     ruleSetType: Microsoft_DefaultRuleSet
-    ruleSetVersion: "2.1"
+    ruleSetVersion: '2.1'
     ruleGroupOverrides:
-      - ruleGroupName: SQLI
-        rules:
-          - ruleId: "942100"
-            action: Redirect            # <-- FD-only override action
+    - ruleGroupName: SQLI
+      rules:
+      - ruleId: '942100'
+        action: Redirect
 ```
 
 **Fix:** Use `Allow`, `Block`, or `Log` for Application Gateway managed rule overrides.

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-07-26
 
 ### Added
 - Zone files can nest all Azure WAF sections under a single `azure:` block; the flat spelling is deprecated.
@@ -14,10 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Minimum `octorules` dependency: `>=0.32.0`.
 - Policy settings module now uses the core `SettingsChange`/`SettingsPlan`/`SettingsFormatter` framework for plan formatting.
 
+### Removed
+- `ManagedExclusionsFormatter.format_report` — core removed the dead
+  `FormatExtension.format_report` drift-report hook.
+
 ### Fixed
-- App Gateway adapter now raises `ProviderError` when denormalizing a rate-limit
-  rule with an invalid `rateLimitDurationInMinutes` value. Previously the adapter
-  silently fell back to "FiveMins" with a warning, masking invalid configuration.
+- App Gateway adapter raises `ProviderError` on an invalid
+  `rateLimitDurationInMinutes` instead of silently falling back to
+  "FiveMins".
 
 ## [0.3.0] - 2026-06-11
 
