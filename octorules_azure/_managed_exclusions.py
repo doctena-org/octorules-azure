@@ -214,7 +214,6 @@ class ManagedExclusionsExtension(ProviderExtension):
     """Managed-rule exclusions."""
 
     section = "azure.waf_managed_exclusions"
-    formatter = ManagedExclusionsFormatter()
 
     def prefetch(self, desired, scope, provider):
         return _prefetch_managed_exclusions(desired, scope, provider)
@@ -227,9 +226,6 @@ class ManagedExclusionsExtension(ProviderExtension):
 
     def dump(self, scope, provider):
         return _dump_managed_exclusions(scope, provider)
-
-    def validate(self, desired, zone_name, errors, lines):
-        return _validate_managed_exclusions(desired, zone_name, errors, lines)
 
 
 # ---------------------------------------------------------------------------
