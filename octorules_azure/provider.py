@@ -25,7 +25,11 @@ from azure.core.exceptions import (
     ServiceRequestError,
 )
 from octorules.config import ConfigError
-from octorules.provider.base import PhaseRulesResult, Scope
+from octorules.provider.base import (
+    SUPPORTS_ZONE_DISCOVERY,
+    PhaseRulesResult,
+    Scope,
+)
 from octorules.provider.exceptions import ProviderAuthError, ProviderError
 from octorules.provider.utils import make_error_wrapper
 from octorules.retry import retry_with_backoff
@@ -127,7 +131,7 @@ class AzureWafProvider:
     """
 
     NAMESPACE = "azure"
-    SUPPORTS = frozenset({"zone_discovery"})
+    SUPPORTS = frozenset({SUPPORTS_ZONE_DISCOVERY})
 
     # Built lazily by the `extensions` property.
     _extensions: list | None = None
