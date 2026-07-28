@@ -512,22 +512,6 @@ class AppGatewayAdapter:
         return d
 
 
-def _normalise_ag_rule_group_override(override: dict) -> dict:
-    """Normalise an App Gateway rule group override to canonical form.
-
-    This is a convenience wrapper that passes the AG-specific "state" parameter.
-    """
-    return _normalise_rule_group_override(override, enabled_state_field="state")
-
-
-def _denormalise_ag_rule_group_override(override: dict) -> dict:
-    """Denormalise a canonical rule group override to App Gateway SDK format.
-
-    This is a convenience wrapper that passes the AG-specific "state" parameter.
-    """
-    return _denormalise_rule_group_override(override, enabled_state_field="state")
-
-
 def _normalise_ag_condition(c: dict) -> dict:
     """Normalise a single App Gateway match condition to canonical form."""
     # Flatten matchVariables array to matchVariable + selector
