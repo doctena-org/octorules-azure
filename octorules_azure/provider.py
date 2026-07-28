@@ -129,6 +129,9 @@ class AzureWafProvider:
     NAMESPACE = "azure"
     SUPPORTS = frozenset({"zone_discovery"})
 
+    # Built lazily by the `extensions` property.
+    _extensions: list | None = None
+
     def __init__(
         self,
         *,
@@ -575,24 +578,32 @@ class AzureWafProvider:
         self._with_etag_retry(_op, f"managed_exclusions {scope.zone_id}")
         log.debug("Updated managed exclusions for %s", scope.zone_id)
 
+    # --- Extensions ---
+
+    @property
+    def extensions(self) -> list:
+        """Azure WAF's own provider extensions.
+
+        Core walks this instead of a global registry, so an extension is
+        only ever handed the provider that owns it.
+        """
+        from octorules_azure._managed_exclusions import ManagedExclusionsExtension
+        from octorules_azure._policy_settings import PolicySettingsExtension
+
+        if self._extensions is None:
+            self._extensions = [
+                PolicySettingsExtension(),
+                ManagedExclusionsExtension(),
+            ]
+        return self._extensions
+
     # --- Dump ---
 
     def dump_extra_sections(self, scope: Scope) -> dict:
-        """Azure WAF-owned settings sections for the dumped zone file.
-
-        Called only with this provider, so a section can never be requested
-        from a provider that cannot fetch it — the reason dump is a method
-        here and not an extension registry.
-        """
-        from octorules_azure._managed_exclusions import _dump_managed_exclusions
-        from octorules_azure._policy_settings import _dump_policy_settings
-
+        """Azure WAF-owned sections for the dumped zone file."""
         result: dict = {}
-        for fn in (
-            _dump_policy_settings,
-            _dump_managed_exclusions,
-        ):
-            data = fn(scope, self)
+        for ext in self.extensions:
+            data = ext.dump(scope, self)
             if data:
                 result.update(data)
         return result

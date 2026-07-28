@@ -11,7 +11,7 @@ config in ``octorules_bunny/_shield_config.py``.
 
 import logging
 
-from octorules.extensions import SettingsChange, SettingsPlan
+from octorules.extensions import ProviderExtension, SettingsChange, SettingsPlan
 from octorules.extensions import SettingsFormatter as CoreSettingsFormatter
 from octorules.registration import idempotent_registration
 
@@ -306,6 +306,31 @@ class PolicySettingsFormatter(CoreSettingsFormatter):
             plan_type=PolicySettingsPlan,
             prefix="policy_settings",
         )
+
+
+# ---------------------------------------------------------------------------
+# Extension
+# ---------------------------------------------------------------------------
+class PolicySettingsExtension(ProviderExtension):
+    """WAF policy-level settings."""
+
+    section = "azure_waf_policy_settings"
+    formatter = PolicySettingsFormatter()
+
+    def prefetch(self, desired, scope, provider):
+        return _prefetch_policy_settings(desired, scope, provider)
+
+    def finalize(self, zp, desired, scope, provider, ctx):
+        return _finalize_policy_settings(zp, desired, scope, provider, ctx)
+
+    def apply(self, zp, plans, scope, provider):
+        return _apply_policy_settings(zp, plans, scope, provider)
+
+    def dump(self, scope, provider):
+        return _dump_policy_settings(scope, provider)
+
+    def validate(self, desired, zone_name, errors, lines):
+        return _validate_policy_settings(desired, zone_name, errors, lines)
 
 
 # ---------------------------------------------------------------------------
