@@ -14,7 +14,7 @@ validate_extension, and dump_extension.
 import logging
 from dataclasses import dataclass, field
 
-from octorules.extensions import ProviderExtension
+from octorules.extensions import ProviderExtension, SettingsChange, SettingsFormatter
 from octorules.registration import idempotent_registration
 
 log = logging.getLogger(__name__)
@@ -25,10 +25,18 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 @dataclass
 class ManagedExclusionsPlan:
-    """Plan for global managed-rule exclusion changes in a zone."""
+    """Plan for global managed-rule exclusion changes in a zone.
+
+    The exclusion lists are the source of truth — apply sends ``desired``
+    wholesale — so ``changes`` is a view over them that lets core's
+    :class:`SettingsFormatter` render this plan like any other settings
+    section, instead of hand-rolling a formatter against private core names.
+    """
 
     current: list[dict] = field(default_factory=list)
     desired: list[dict] = field(default_factory=list)
+    # Nothing here is plan-gated; present so SettingsFormatter can read it.
+    unsupported: list[str] = field(default_factory=list)
 
     @property
     def has_changes(self) -> bool:
@@ -37,6 +45,18 @@ class ManagedExclusionsPlan:
     @property
     def total_changes(self) -> int:
         return 1 if self.has_changes else 0
+
+    @property
+    def changes(self) -> list[SettingsChange]:
+        if not self.has_changes:
+            return []
+        return [
+            SettingsChange(
+                field="exclusions",
+                current=len(self.current),
+                desired=len(self.desired),
+            )
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -169,69 +189,22 @@ def _dump_managed_exclusions(scope, provider):
 # ---------------------------------------------------------------------------
 # Format extension
 # ---------------------------------------------------------------------------
-class ManagedExclusionsFormatter:
-    """Formats global managed exclusion diffs for plan output."""
+class ManagedExclusionsFormatter(SettingsFormatter):
+    """Formats global managed exclusion diffs for plan output.
 
-    def format_text(self, plans: list, use_color: bool) -> list[str]:
-        from octorules._color import Pen
+    Text, markdown and HTML come from core.  Only JSON is overridden, to
+    carry the full exclusion lists rather than the counts the shared
+    formatter renders.
+    """
 
-        p = Pen(use_color)
-        lines: list[str] = []
-        for plan in plans:
-            if not isinstance(plan, ManagedExclusionsPlan) or not plan.has_changes:
-                continue
-            line = f"  ~ managed_exclusions: {len(plan.current)} -> {len(plan.desired)} exclusions"
-            lines.append(p.warning(line))
-        return lines
+    def __init__(self) -> None:
+        super().__init__(plan_type=ManagedExclusionsPlan, prefix="managed_exclusions")
 
     def format_json(self, plans: list) -> list[dict]:
         result: list[dict] = []
-        for plan in plans:
-            if not isinstance(plan, ManagedExclusionsPlan) or not plan.has_changes:
-                continue
-            result.append(
-                {
-                    "current": plan.current,
-                    "desired": plan.desired,
-                }
-            )
+        for plan in self._active_plans(plans):
+            result.append({"current": plan.current, "desired": plan.desired})
         return result
-
-    def format_markdown(
-        self, plans: list, pending_diffs: list[list[tuple[str, object, object]]]
-    ) -> list[str]:
-        from octorules.formatter import _md_escape
-
-        lines: list[str] = []
-        for plan in plans:
-            if not isinstance(plan, ManagedExclusionsPlan) or not plan.has_changes:
-                continue
-            label = _md_escape("managed_exclusions")
-            detail = _md_escape(f"{len(plan.current)} -> {len(plan.desired)} exclusions")
-            lines.append(f"| ~ | {label} | | {detail} |")
-        return lines
-
-    def format_html(self, plans: list, lines: list[str]) -> tuple[int, int, int, int]:
-        from html import escape as html_escape
-
-        from octorules.formatter import _HTML_TABLE_HEADER, _html_summary_row
-
-        total_modifies = 0
-        for plan in plans:
-            if not isinstance(plan, ManagedExclusionsPlan) or not plan.has_changes:
-                continue
-            lines.extend(_HTML_TABLE_HEADER)
-            total_modifies += 1
-            label = html_escape("managed_exclusions")
-            detail = html_escape(f"{len(plan.current)} -> {len(plan.desired)} exclusions")
-            lines.append("  <tr>")
-            lines.append("    <td>Modify</td>")
-            lines.append(f"    <td>{label}</td>")
-            lines.append(f"    <td>{detail}</td>")
-            lines.append("  </tr>")
-            lines.extend(_html_summary_row(0, 0, 1, 0))
-            lines.append("</table>")
-        return 0, 0, total_modifies, 0
 
 
 # ---------------------------------------------------------------------------
