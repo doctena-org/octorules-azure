@@ -97,7 +97,7 @@ def _check_total_rule_count(rules_data: dict[str, Any], ctx: LintContext) -> Non
     total = count_phase_rules(
         rules_data,
         AZURE_PHASE_NAMES,
-        exclude=("azure_waf_managed_rules",),
+        exclude=("azure.waf_managed_rules",),
         dict_only=False,
     )
 
@@ -204,7 +204,7 @@ def _check_cross_phase_regex_count(rules_data: dict[str, Any], ctx: LintContext)
 def azure_lint(rules_data: dict[str, Any], ctx: LintContext) -> None:
     """Run all Azure WAF lint checks on a zone rules file."""
     for phase_name, rules in iter_provider_phases(rules_data, ctx, AZURE_PHASE_NAMES):
-        if phase_name == "azure_waf_managed_rules":
+        if phase_name == "azure.waf_managed_rules":
             results = validate_managed_rules(rules, phase=phase_name)
         else:
             results = validate_rules(rules, phase=phase_name)

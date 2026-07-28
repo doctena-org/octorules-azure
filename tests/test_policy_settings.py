@@ -366,7 +366,7 @@ class TestPrefetchHook:
             "enabled_state": "Enabled",
             "mode": "Prevention",
         }
-        all_desired = {"azure_waf_policy_settings": {"mode": "Detection"}}
+        all_desired = {"azure.waf_policy_settings": {"mode": "Detection"}}
         result = _prefetch_policy_settings(all_desired, _scope(), provider)
         assert result is not None
         current, desired = result
@@ -378,7 +378,7 @@ class TestPrefetchHook:
 
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderError("API down")
-        all_desired = {"azure_waf_policy_settings": {"mode": "Detection"}}
+        all_desired = {"azure.waf_policy_settings": {"mode": "Detection"}}
         result = _prefetch_policy_settings(all_desired, _scope(), provider)
         current, _desired = result
         assert current == {}
@@ -389,7 +389,7 @@ class TestPrefetchHook:
 
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderAuthError("forbidden")
-        all_desired = {"azure_waf_policy_settings": {"mode": "Detection"}}
+        all_desired = {"azure.waf_policy_settings": {"mode": "Detection"}}
         with pytest.raises(ProviderAuthError):
             _prefetch_policy_settings(all_desired, _scope(), provider)
 
@@ -407,8 +407,8 @@ class TestFinalizeHook:
         ctx = (current, desired)
 
         _finalize_policy_settings(zp, {}, _scope(), MagicMock(), ctx)
-        assert "azure_waf_policy_settings" in zp.extension_plans
-        plan = zp.extension_plans["azure_waf_policy_settings"][0]
+        assert "azure.waf_policy_settings" in zp.extension_plans
+        plan = zp.extension_plans["azure.waf_policy_settings"][0]
         assert plan.has_changes
 
     def test_no_plan_when_no_changes(self):
@@ -420,7 +420,7 @@ class TestFinalizeHook:
         ctx = (current, desired)
 
         _finalize_policy_settings(zp, {}, _scope(), MagicMock(), ctx)
-        assert "azure_waf_policy_settings" not in zp.extension_plans
+        assert "azure.waf_policy_settings" not in zp.extension_plans
 
     def test_none_ctx_is_noop(self):
         zp = MagicMock()
@@ -444,7 +444,7 @@ class TestApplyHook:
         )
         synced, error = _apply_policy_settings(zp, [plan], _scope(), provider)
         assert error is None
-        assert "azure_waf_policy_settings" in synced
+        assert "azure.waf_policy_settings" in synced
         provider.update_policy_settings.assert_called_once()
         call_args = provider.update_policy_settings.call_args
         payload = call_args[0][1]
@@ -474,7 +474,7 @@ class TestApplyHook:
 class TestValidateExtension:
     def test_valid_settings(self):
         desired = {
-            "azure_waf_policy_settings": {
+            "azure.waf_policy_settings": {
                 "mode": "Prevention",
                 "enabled_state": "Enabled",
                 "request_body_check": True,
@@ -485,7 +485,7 @@ class TestValidateExtension:
         assert errors == []
 
     def test_invalid_mode(self):
-        desired = {"azure_waf_policy_settings": {"mode": "Aggressive"}}
+        desired = {"azure.waf_policy_settings": {"mode": "Aggressive"}}
         errors: list[str] = []
         _validate_policy_settings(desired, "zone", errors, [])
         assert len(errors) == 1
@@ -493,7 +493,7 @@ class TestValidateExtension:
         assert "Aggressive" in errors[0]
 
     def test_invalid_enabled_state(self):
-        desired = {"azure_waf_policy_settings": {"enabled_state": "Maybe"}}
+        desired = {"azure.waf_policy_settings": {"enabled_state": "Maybe"}}
         errors: list[str] = []
         _validate_policy_settings(desired, "zone", errors, [])
         assert len(errors) == 1
@@ -501,7 +501,7 @@ class TestValidateExtension:
         assert "Maybe" in errors[0]
 
     def test_invalid_request_body_check(self):
-        desired = {"azure_waf_policy_settings": {"request_body_check": "yes"}}
+        desired = {"azure.waf_policy_settings": {"request_body_check": "yes"}}
         errors: list[str] = []
         _validate_policy_settings(desired, "zone", errors, [])
         assert len(errors) == 1
@@ -514,12 +514,12 @@ class TestValidateExtension:
 
     def test_non_dict_config_is_ok(self):
         errors: list[str] = []
-        _validate_policy_settings({"azure_waf_policy_settings": "not-a-dict"}, "zone", errors, [])
+        _validate_policy_settings({"azure.waf_policy_settings": "not-a-dict"}, "zone", errors, [])
         assert errors == []
 
     def test_multiple_errors(self):
         desired = {
-            "azure_waf_policy_settings": {
+            "azure.waf_policy_settings": {
                 "mode": "Aggressive",
                 "enabled_state": "Maybe",
                 "request_body_check": "yes",
@@ -541,8 +541,8 @@ class TestDumpExtension:
             "mode": "Prevention",
         }
         result = _dump_policy_settings(_scope(), provider)
-        assert "azure_waf_policy_settings" in result
-        assert result["azure_waf_policy_settings"]["mode"] == "Prevention"
+        assert "azure.waf_policy_settings" in result
+        assert result["azure.waf_policy_settings"]["mode"] == "Prevention"
 
     def test_dump_api_failure(self):
         from octorules.provider.exceptions import ProviderError

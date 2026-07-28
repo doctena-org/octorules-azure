@@ -19,7 +19,7 @@ class TestRegistration:
 class TestAzureLint:
     def test_runs_validation(self):
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "priority": 1,
                     "action": "Block",
@@ -55,7 +55,7 @@ class TestAzureLint:
 
     def test_phase_filter_respected(self):
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "priority": 1,
                     "action": "Block",
@@ -75,14 +75,14 @@ class TestAzureLint:
                 }
             ]
         }
-        ctx = LintContext(phase_filter=["azure_waf_rate_rules"])
+        ctx = LintContext(phase_filter=["azure.waf_rate_rules"])
         azure_lint(rules_data, ctx)
         # Custom rules phase should be skipped
         assert ctx.results == []
 
     def test_valid_rules_produce_no_errors(self):
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -107,23 +107,23 @@ class TestAzureLint:
         assert ctx.results == []
 
     def test_non_list_phase_produces_az024(self):
-        rules_data = {"azure_waf_custom_rules": "not a list"}
+        rules_data = {"azure.waf_custom_rules": "not a list"}
         ctx = LintContext()
         azure_lint(rules_data, ctx)
         assert_lint(ctx, "AZ024")
         result = next(r for r in ctx.results if r.rule_id == "AZ024")
-        assert result.phase == "azure_waf_custom_rules"
+        assert result.phase == "azure.waf_custom_rules"
         assert "not a list" in result.message
 
     def test_non_list_phase_dict_produces_az024(self):
-        rules_data = {"azure_waf_custom_rules": {"key": "value"}}
+        rules_data = {"azure.waf_custom_rules": {"key": "value"}}
         ctx = LintContext()
         azure_lint(rules_data, ctx)
         assert_lint(ctx, "AZ024")
 
     def test_non_list_phase_skipped_by_filter(self):
-        rules_data = {"azure_waf_custom_rules": "not a list"}
-        ctx = LintContext(phase_filter=["azure_waf_rate_rules"])
+        rules_data = {"azure.waf_custom_rules": "not a list"}
+        ctx = LintContext(phase_filter=["azure.waf_rate_rules"])
         azure_lint(rules_data, ctx)
         assert ctx.results == []
 
@@ -141,7 +141,7 @@ class TestCrossPhaseChecks:
             }
         ]
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "R1",
                     "priority": 1,
@@ -183,7 +183,7 @@ class TestCrossPhaseChecks:
             "transforms": [],
         }
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "R1",
                     "priority": 1,
@@ -236,7 +236,7 @@ class TestCrossPhaseChecks:
             "transforms": [],
         }
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "R1",
                     "priority": 1,
@@ -261,7 +261,7 @@ class TestCrossPhaseChecks:
 
     def test_no_duplicate_when_different_conditions(self):
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "R1",
                     "priority": 1,
@@ -326,8 +326,8 @@ class TestTotalRuleCount:
     def test_exceeds_limit_across_phases(self):
         """AZ501 counts across all phases, not per-phase."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 61)],
-            "azure_waf_rate_rules": [
+            "azure.waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 61)],
+            "azure.waf_rate_rules": [
                 {
                     **self._make_rule(f"R{i}", 100 + i),
                     "ruleType": "RateLimitRule",
@@ -345,7 +345,7 @@ class TestTotalRuleCount:
 
     def test_under_limit(self):
         rules_data = {
-            "azure_waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 51)],
+            "azure.waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 51)],
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
@@ -354,7 +354,7 @@ class TestTotalRuleCount:
     def test_non_dict_entries_count_toward_limit(self):
         """Every list entry consumes a policy slot — malformed items included."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 100)]
+            "azure.waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 100)]
             + ["junk", "more-junk"],
         }
         # 99 dicts + 2 non-dicts = 101 entries > 100
@@ -365,8 +365,8 @@ class TestTotalRuleCount:
     def test_managed_rules_excluded_from_count(self):
         """AZ501 must not count managed rule sets toward the 100-custom-rule limit."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 100)],
-            "azure_waf_managed_rules": [
+            "azure.waf_custom_rules": [self._make_rule(f"C{i}", i) for i in range(1, 100)],
+            "azure.waf_managed_rules": [
                 {
                     "ref": "Microsoft_DefaultRuleSet",
                     "ruleSetType": "Microsoft_DefaultRuleSet",
@@ -410,8 +410,8 @@ class TestCrossPhasePriorities:
     def test_duplicate_priority_across_phases(self):
         """AZ521: Same priority in custom and rate phases."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_rule("C1", 5)],
-            "azure_waf_rate_rules": [
+            "azure.waf_custom_rules": [self._make_rule("C1", 5)],
+            "azure.waf_rate_rules": [
                 {
                     **self._make_rule("R1", 5, rule_type="RateLimitRule"),
                     "rateLimitDurationInMinutes": 1,
@@ -426,8 +426,8 @@ class TestCrossPhasePriorities:
 
     def test_no_duplicate_different_priorities(self):
         rules_data = {
-            "azure_waf_custom_rules": [self._make_rule("C1", 1)],
-            "azure_waf_rate_rules": [
+            "azure.waf_custom_rules": [self._make_rule("C1", 1)],
+            "azure.waf_rate_rules": [
                 {
                     **self._make_rule("R1", 2, rule_type="RateLimitRule"),
                     "rateLimitDurationInMinutes": 1,
@@ -465,8 +465,8 @@ class TestCrossPhaseRegexCount:
     def test_regex_count_across_phases(self):
         """AZ500: 3 regex in custom + 3 regex in rate = 6 > 5 limit."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_regex_rule(f"C{i}", i) for i in range(1, 4)],
-            "azure_waf_rate_rules": [
+            "azure.waf_custom_rules": [self._make_regex_rule(f"C{i}", i) for i in range(1, 4)],
+            "azure.waf_rate_rules": [
                 {
                     **self._make_regex_rule(f"R{i}", 10 + i, rule_type="RateLimitRule"),
                     "rateLimitDurationInMinutes": 1,
@@ -485,7 +485,7 @@ class TestCrossPhaseRegexCount:
     def test_single_phase_exceeds_limit(self):
         """AZ500: 6 regex rules in one phase exceeds the 5-rule limit."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_regex_rule(f"R{i}", i) for i in range(1, 7)],
+            "azure.waf_custom_rules": [self._make_regex_rule(f"R{i}", i) for i in range(1, 7)],
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
@@ -495,7 +495,7 @@ class TestCrossPhaseRegexCount:
     def test_at_limit_no_error(self):
         """5 regex rules is exactly at the limit — no AZ500."""
         rules_data = {
-            "azure_waf_custom_rules": [self._make_regex_rule(f"R{i}", i) for i in range(1, 6)],
+            "azure.waf_custom_rules": [self._make_regex_rule(f"R{i}", i) for i in range(1, 6)],
         }
         ctx = LintContext()
         azure_lint(rules_data, ctx)
@@ -509,7 +509,7 @@ class TestNewAZ27And34X:
     def test_az027_ref_leading_whitespace(self):
         """AZ027: ref with leading whitespace."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": " LeadingSpace",
                     "priority": 1,
@@ -536,7 +536,7 @@ class TestNewAZ27And34X:
     def test_az027_action_trailing_whitespace(self):
         """AZ027: action with trailing whitespace."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -563,7 +563,7 @@ class TestNewAZ27And34X:
     def test_az027_ruleType_whitespace(self):
         """AZ027: ruleType with whitespace."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -590,7 +590,7 @@ class TestNewAZ27And34X:
     def test_az027_selector_whitespace(self):
         """AZ027: selector with whitespace."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -617,7 +617,7 @@ class TestNewAZ27And34X:
     def test_az342_overly_permissive_regex_empty(self):
         """AZ342: empty regex matches everything."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -644,7 +644,7 @@ class TestNewAZ27And34X:
     def test_az342_overly_permissive_regex_dot(self):
         """AZ342: dot matches every character."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -671,7 +671,7 @@ class TestNewAZ27And34X:
     def test_az342_overly_permissive_regex_dotstar(self):
         """AZ342: .* matches all."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -698,7 +698,7 @@ class TestNewAZ27And34X:
     def test_az343_fully_anchored_literal(self):
         """AZ343: fully-anchored literal regex should use Equal."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -725,7 +725,7 @@ class TestNewAZ27And34X:
     def test_az343_fully_anchored_literal_escaped_slash(self):
         """AZ343: anchored literal with escaped slash."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -752,7 +752,7 @@ class TestNewAZ27And34X:
     def test_az344_http_method_lowercase(self):
         """AZ344: HTTP method with lowercase letters."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -779,7 +779,7 @@ class TestNewAZ27And34X:
     def test_az344_http_method_mixed_case(self):
         """AZ344: HTTP method with mixed case."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -807,7 +807,7 @@ class TestNewAZ27And34X:
     def test_az345_header_selector_uppercase(self):
         """AZ345: header selector with uppercase letters."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -834,7 +834,7 @@ class TestNewAZ27And34X:
     def test_az345_cookie_selector_uppercase(self):
         """AZ345: cookie selector with uppercase letters."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -861,7 +861,7 @@ class TestNewAZ27And34X:
     def test_valid_uppercase_methods_no_az344(self):
         """No AZ344 for properly uppercase methods."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -888,7 +888,7 @@ class TestNewAZ27And34X:
     def test_valid_lowercase_headers_no_az345(self):
         """No AZ345 for properly lowercase headers."""
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,
@@ -968,7 +968,7 @@ class TestRuleOverlap:
         long_pattern = "^.+$" + "x" * 300  # Extend beyond 256-char limit
 
         rules_data = {
-            "azure_waf_custom_rules": [
+            "azure.waf_custom_rules": [
                 {
                     "ref": "TestRule",
                     "priority": 1,

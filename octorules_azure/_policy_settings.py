@@ -205,7 +205,7 @@ def diff_policy_settings(current: dict, desired: dict) -> PolicySettingsPlan:
 # ---------------------------------------------------------------------------
 def _prefetch_policy_settings(all_desired, scope, provider):
     """Prefetch: fetch current policy settings."""
-    desired = all_desired.get("azure_waf_policy_settings")
+    desired = all_desired.get("azure.waf_policy_settings")
     if desired is None:
         return None
 
@@ -230,7 +230,7 @@ def _finalize_policy_settings(zp, all_desired, scope, provider, ctx):
     current, desired = ctx
     plan = diff_policy_settings(current, desired)
     if plan.has_changes:
-        zp.extension_plans.setdefault("azure_waf_policy_settings", []).append(plan)
+        zp.extension_plans.setdefault("azure.waf_policy_settings", []).append(plan)
 
 
 def _apply_policy_settings(zp, plans, scope, provider):
@@ -244,14 +244,14 @@ def _apply_policy_settings(zp, plans, scope, provider):
         desired_values = {c.field: c.desired for c in plan.changes if c.has_changes}
         if desired_values:
             provider.update_policy_settings(scope, desired_values)
-            synced.append("azure_waf_policy_settings")
+            synced.append("azure.waf_policy_settings")
 
     return synced, None
 
 
 def _validate_policy_settings(desired, zone_name, errors, lines):
     """Validate azure_waf_policy_settings offline."""
-    settings = desired.get("azure_waf_policy_settings")
+    settings = desired.get("azure.waf_policy_settings")
     if not isinstance(settings, dict):
         return
 
@@ -289,7 +289,7 @@ def _dump_policy_settings(scope, provider):
         return None
 
     if settings:
-        return {"azure_waf_policy_settings": settings}
+        return {"azure.waf_policy_settings": settings}
     return None
 
 
@@ -314,7 +314,7 @@ class PolicySettingsFormatter(CoreSettingsFormatter):
 class PolicySettingsExtension(ProviderExtension):
     """WAF policy-level settings."""
 
-    section = "azure_waf_policy_settings"
+    section = "azure.waf_policy_settings"
     formatter = PolicySettingsFormatter()
 
     def prefetch(self, desired, scope, provider):
@@ -347,6 +347,6 @@ def register_policy_settings() -> None:
     )
 
     register_plan_zone_hook(_prefetch_policy_settings, _finalize_policy_settings)
-    register_apply_extension("azure_waf_policy_settings", _apply_policy_settings)
-    register_format_extension("azure_waf_policy_settings", PolicySettingsFormatter())
+    register_apply_extension("azure.waf_policy_settings", _apply_policy_settings)
+    register_format_extension("azure.waf_policy_settings", PolicySettingsFormatter())
     register_validate_extension(_validate_policy_settings)

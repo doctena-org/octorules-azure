@@ -4,21 +4,21 @@ from octorules.phases import Phase
 
 AZURE_PHASES = [
     Phase(
-        "azure_waf_custom_rules",
+        "azure.waf_custom_rules",
         "azure_waf_custom",
         None,
         zone_level=True,
         account_level=False,
     ),
     Phase(
-        "azure_waf_rate_rules",
+        "azure.waf_rate_rules",
         "azure_waf_rate",
         None,
         zone_level=True,
         account_level=False,
     ),
     Phase(
-        "azure_waf_managed_rules",
+        "azure.waf_managed_rules",
         "azure_waf_managed",
         None,
         zone_level=True,

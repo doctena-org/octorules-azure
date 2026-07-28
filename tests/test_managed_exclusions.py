@@ -175,7 +175,7 @@ class TestPrefetchHook:
     def test_fetches_exclusions(self):
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = _SAMPLE_EXCLUSIONS
-        all_desired = {"azure_waf_managed_exclusions": [_SAMPLE_EXCLUSIONS[0]]}
+        all_desired = {"azure.waf_managed_exclusions": [_SAMPLE_EXCLUSIONS[0]]}
         result = _prefetch_managed_exclusions(all_desired, _scope(), provider)
         assert result is not None
         current, desired = result
@@ -187,7 +187,7 @@ class TestPrefetchHook:
 
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderError("API down")
-        all_desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+        all_desired = {"azure.waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
         result = _prefetch_managed_exclusions(all_desired, _scope(), provider)
         current, _desired = result
         assert current == []
@@ -198,7 +198,7 @@ class TestPrefetchHook:
 
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderAuthError("forbidden")
-        all_desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+        all_desired = {"azure.waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
         with pytest.raises(ProviderAuthError):
             _prefetch_managed_exclusions(all_desired, _scope(), provider)
 
@@ -213,8 +213,8 @@ class TestFinalizeHook:
 
         ctx = ([], _SAMPLE_EXCLUSIONS)
         _finalize_managed_exclusions(zp, {}, _scope(), MagicMock(), ctx)
-        assert "azure_waf_managed_exclusions" in zp.extension_plans
-        plan = zp.extension_plans["azure_waf_managed_exclusions"][0]
+        assert "azure.waf_managed_exclusions" in zp.extension_plans
+        plan = zp.extension_plans["azure.waf_managed_exclusions"][0]
         assert plan.has_changes
 
     def test_no_plan_when_no_changes(self):
@@ -223,7 +223,7 @@ class TestFinalizeHook:
 
         ctx = (_SAMPLE_EXCLUSIONS, _SAMPLE_EXCLUSIONS)
         _finalize_managed_exclusions(zp, {}, _scope(), MagicMock(), ctx)
-        assert "azure_waf_managed_exclusions" not in zp.extension_plans
+        assert "azure.waf_managed_exclusions" not in zp.extension_plans
 
     def test_none_ctx_is_noop(self):
         zp = MagicMock()
@@ -242,7 +242,7 @@ class TestApplyHook:
         plan = ManagedExclusionsPlan(current=[], desired=_SAMPLE_EXCLUSIONS)
         synced, error = _apply_managed_exclusions(zp, [plan], _scope(), provider)
         assert error is None
-        assert "azure_waf_managed_exclusions" in synced
+        assert "azure.waf_managed_exclusions" in synced
         provider.update_managed_exclusions.assert_called_once()
         call_args = provider.update_managed_exclusions.call_args
         assert call_args[0][1] == _SAMPLE_EXCLUSIONS
@@ -267,20 +267,20 @@ class TestApplyHook:
 # ---------------------------------------------------------------------------
 class TestValidateExtension:
     def test_valid_exclusions(self):
-        desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+        desired = {"azure.waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
         errors: list[str] = []
         _validate_managed_exclusions(desired, "zone", errors, [])
         assert errors == []
 
     def test_not_a_list(self):
-        desired = {"azure_waf_managed_exclusions": "bad"}
+        desired = {"azure.waf_managed_exclusions": "bad"}
         errors: list[str] = []
         _validate_managed_exclusions(desired, "zone", errors, [])
         assert len(errors) == 1
         assert "must be a list" in errors[0]
 
     def test_non_dict_entry(self):
-        desired = {"azure_waf_managed_exclusions": ["bad"]}
+        desired = {"azure.waf_managed_exclusions": ["bad"]}
         errors: list[str] = []
         _validate_managed_exclusions(desired, "zone", errors, [])
         assert len(errors) == 1
@@ -292,7 +292,7 @@ class TestValidateExtension:
         assert errors == []
 
     def test_empty_list_is_ok(self):
-        desired = {"azure_waf_managed_exclusions": []}
+        desired = {"azure.waf_managed_exclusions": []}
         errors: list[str] = []
         _validate_managed_exclusions(desired, "zone", errors, [])
         assert errors == []
@@ -303,7 +303,7 @@ class TestValidateExtension:
 
         set_waf_type("front_door")
         try:
-            desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+            desired = {"azure.waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
             errors: list[str] = []
             _validate_managed_exclusions(desired, "zone", errors, [])
             assert len(errors) == 1
@@ -317,7 +317,7 @@ class TestValidateExtension:
 
         set_waf_type("app_gateway")
         try:
-            desired = {"azure_waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
+            desired = {"azure.waf_managed_exclusions": _SAMPLE_EXCLUSIONS}
             errors: list[str] = []
             _validate_managed_exclusions(desired, "zone", errors, [])
             assert errors == []
@@ -333,8 +333,8 @@ class TestDumpExtension:
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = _SAMPLE_EXCLUSIONS
         result = _dump_managed_exclusions(_scope(), provider)
-        assert "azure_waf_managed_exclusions" in result
-        assert len(result["azure_waf_managed_exclusions"]) == 2
+        assert "azure.waf_managed_exclusions" in result
+        assert len(result["azure.waf_managed_exclusions"]) == 2
 
     def test_dump_api_failure(self):
         from octorules.provider.exceptions import ProviderError

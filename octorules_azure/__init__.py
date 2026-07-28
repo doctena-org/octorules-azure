@@ -17,13 +17,13 @@ register_api_fields("rule", {"ruleType", "ruleSetType"})
 # Register namespace for nested zone-file format.
 register_namespace(
     "azure",
-    {
-        "waf_custom_rules": "azure_waf_custom_rules",
-        "waf_rate_rules": "azure_waf_rate_rules",
-        "waf_managed_rules": "azure_waf_managed_rules",
-        "waf_policy_settings": "azure_waf_policy_settings",
-        "waf_managed_exclusions": "azure_waf_managed_exclusions",
-    },
+    (
+        "waf_custom_rules",
+        "waf_rate_rules",
+        "waf_managed_rules",
+        "waf_policy_settings",
+        "waf_managed_exclusions",
+    ),
 )
 
 from octorules_azure.linter import register_azure_linter  # noqa: E402
@@ -36,14 +36,14 @@ from octorules_azure.audit import register_azure_audit  # noqa: E402
 register_azure_audit()
 
 # Register policy settings extension.
-register_non_phase_key("azure_waf_policy_settings")
+register_non_phase_key("azure.waf_policy_settings")
 
 from octorules_azure._policy_settings import register_policy_settings  # noqa: E402
 
 register_policy_settings()
 
 # Register managed exclusions extension.
-register_non_phase_key("azure_waf_managed_exclusions")
+register_non_phase_key("azure.waf_managed_exclusions")
 
 from octorules_azure._managed_exclusions import register_managed_exclusions  # noqa: E402
 

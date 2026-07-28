@@ -27,7 +27,7 @@ def lint_config(tmp_path):
 
     # Clean rules — public IPs only, no AZ319/AZ322 hits expected.
     (rules_dir / "clean-policy.yaml").write_text(
-        "azure_waf_custom_rules:\n"
+        "azure:\n  waf_custom_rules:\n"
         "  - ref: BlockPublicIPs\n"
         "    priority: 1\n"
         "    action: Block\n"
@@ -43,7 +43,7 @@ def lint_config(tmp_path):
 
     # Rules that trigger multiple AZ violations.
     (rules_dir / "bad-policy.yaml").write_text(
-        "azure_waf_custom_rules:\n"
+        "azure:\n  waf_custom_rules:\n"
         # AZ319: reserved IP.
         "  - ref: BlockPrivate\n"
         "    priority: 1\n"

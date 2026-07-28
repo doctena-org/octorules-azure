@@ -78,7 +78,7 @@ def diff_managed_exclusions(current: list[dict], desired: list[dict]) -> Managed
 # ---------------------------------------------------------------------------
 def _prefetch_managed_exclusions(all_desired, scope, provider):
     """Prefetch: fetch current global managed exclusions."""
-    desired = all_desired.get("azure_waf_managed_exclusions")
+    desired = all_desired.get("azure.waf_managed_exclusions")
     if desired is None:
         return None
 
@@ -103,7 +103,7 @@ def _finalize_managed_exclusions(zp, all_desired, scope, provider, ctx):
     current, desired = ctx
     plan = diff_managed_exclusions(current, desired)
     if plan.has_changes:
-        zp.extension_plans.setdefault("azure_waf_managed_exclusions", []).append(plan)
+        zp.extension_plans.setdefault("azure.waf_managed_exclusions", []).append(plan)
 
 
 def _apply_managed_exclusions(zp, plans, scope, provider):
@@ -115,14 +115,14 @@ def _apply_managed_exclusions(zp, plans, scope, provider):
             continue
 
         provider.update_managed_exclusions(scope, plan.desired)
-        synced.append("azure_waf_managed_exclusions")
+        synced.append("azure.waf_managed_exclusions")
 
     return synced, None
 
 
 def _validate_managed_exclusions(desired, zone_name, errors, lines):
     """Validate azure_waf_managed_exclusions offline."""
-    exclusions = desired.get("azure_waf_managed_exclusions")
+    exclusions = desired.get("azure.waf_managed_exclusions")
     if exclusions is None:
         return
 
@@ -162,7 +162,7 @@ def _dump_managed_exclusions(scope, provider):
         return None
 
     if exclusions:
-        return {"azure_waf_managed_exclusions": exclusions}
+        return {"azure.waf_managed_exclusions": exclusions}
     return None
 
 
@@ -240,7 +240,7 @@ class ManagedExclusionsFormatter:
 class ManagedExclusionsExtension(ProviderExtension):
     """Managed-rule exclusions."""
 
-    section = "azure_waf_managed_exclusions"
+    section = "azure.waf_managed_exclusions"
     formatter = ManagedExclusionsFormatter()
 
     def prefetch(self, desired, scope, provider):
@@ -273,6 +273,6 @@ def register_managed_exclusions() -> None:
     )
 
     register_plan_zone_hook(_prefetch_managed_exclusions, _finalize_managed_exclusions)
-    register_apply_extension("azure_waf_managed_exclusions", _apply_managed_exclusions)
-    register_format_extension("azure_waf_managed_exclusions", ManagedExclusionsFormatter())
+    register_apply_extension("azure.waf_managed_exclusions", _apply_managed_exclusions)
+    register_format_extension("azure.waf_managed_exclusions", ManagedExclusionsFormatter())
     register_validate_extension(_validate_managed_exclusions)
