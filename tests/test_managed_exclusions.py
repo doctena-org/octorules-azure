@@ -332,7 +332,7 @@ class TestDumpExtension:
     def test_dump_returns_exclusions(self):
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = _SAMPLE_EXCLUSIONS
-        result = _dump_managed_exclusions(_scope(), provider, None)
+        result = _dump_managed_exclusions(_scope(), provider)
         assert "azure_waf_managed_exclusions" in result
         assert len(result["azure_waf_managed_exclusions"]) == 2
 
@@ -341,13 +341,13 @@ class TestDumpExtension:
 
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderError("down")
-        result = _dump_managed_exclusions(_scope(), provider, None)
+        result = _dump_managed_exclusions(_scope(), provider)
         assert result is None
 
     def test_dump_empty_exclusions(self):
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.return_value = []
-        result = _dump_managed_exclusions(_scope(), provider, None)
+        result = _dump_managed_exclusions(_scope(), provider)
         assert result is None
 
     def test_dump_auth_error_propagates(self):
@@ -357,7 +357,7 @@ class TestDumpExtension:
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_managed_exclusions.side_effect = ProviderAuthError("forbidden")
         with pytest.raises(ProviderAuthError):
-            _dump_managed_exclusions(_scope(), provider, None)
+            _dump_managed_exclusions(_scope(), provider)
 
 
 # ---------------------------------------------------------------------------

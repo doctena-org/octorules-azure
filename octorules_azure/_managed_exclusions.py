@@ -149,7 +149,7 @@ def _validate_managed_exclusions(desired, zone_name, errors, lines):
             )
 
 
-def _dump_managed_exclusions(scope, provider, out_dir):
+def _dump_managed_exclusions(scope, provider):
     """Export current global managed exclusions to dump output."""
     from octorules.provider.exceptions import ProviderAuthError, ProviderError
 
@@ -241,7 +241,6 @@ def register_managed_exclusions() -> None:
     """Register all managed exclusions hooks with the core extension system."""
     from octorules.extensions import (
         register_apply_extension,
-        register_dump_extension,
         register_format_extension,
         register_plan_zone_hook,
         register_validate_extension,
@@ -251,4 +250,3 @@ def register_managed_exclusions() -> None:
     register_apply_extension("azure_waf_managed_exclusions", _apply_managed_exclusions)
     register_format_extension("azure_waf_managed_exclusions", ManagedExclusionsFormatter())
     register_validate_extension(_validate_managed_exclusions)
-    register_dump_extension(_dump_managed_exclusions)

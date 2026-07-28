@@ -540,7 +540,7 @@ class TestDumpExtension:
             "enabled_state": "Enabled",
             "mode": "Prevention",
         }
-        result = _dump_policy_settings(_scope(), provider, None)
+        result = _dump_policy_settings(_scope(), provider)
         assert "azure_waf_policy_settings" in result
         assert result["azure_waf_policy_settings"]["mode"] == "Prevention"
 
@@ -549,13 +549,13 @@ class TestDumpExtension:
 
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderError("down")
-        result = _dump_policy_settings(_scope(), provider, None)
+        result = _dump_policy_settings(_scope(), provider)
         assert result is None
 
     def test_dump_empty_settings(self):
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.return_value = {}
-        result = _dump_policy_settings(_scope(), provider, None)
+        result = _dump_policy_settings(_scope(), provider)
         assert result is None
 
     def test_dump_auth_error_propagates(self):
@@ -565,7 +565,7 @@ class TestDumpExtension:
         provider = MagicMock(spec=AzureWafProvider)
         provider.get_policy_settings.side_effect = ProviderAuthError("forbidden")
         with pytest.raises(ProviderAuthError):
-            _dump_policy_settings(_scope(), provider, None)
+            _dump_policy_settings(_scope(), provider)
 
 
 # ---------------------------------------------------------------------------
