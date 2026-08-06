@@ -1777,3 +1777,64 @@ class TestRuleEntryNotDict:
         # The valid rule should not produce AZ023
         az023_count = sum(1 for r in results if r.rule_id == "AZ023")
         assert az023_count == 1
+
+
+class TestFrontDoorGeoCodeLimit:
+    """AZ302 — Front Door geo-filtering doc: "You can only include a maximum
+    of ten country/region codes in a single custom rule." Per rule, summed
+    across GeoMatch conditions; App Gateway publishes no such limit."""
+
+    def teardown_method(self):
+        set_waf_type("")
+
+    def _geo_rule(self, *code_lists):
+        return make_normalised_rule(
+            matchConditions=[
+                {"matchVariable": "RemoteAddr", "operator": "GeoMatch", "matchValue": codes}
+                for codes in code_lists
+            ]
+        )
+
+    def test_ten_codes_pass(self):
+        set_waf_type("front_door")
+        codes = ["AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR"]
+        assert_no_lint(validate_rules([self._geo_rule(codes)]), "AZ302")
+
+    def test_eleven_codes_error(self):
+        set_waf_type("front_door")
+        codes = ["AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AT"]
+        assert_lint(validate_rules([self._geo_rule(codes)]), "AZ302")
+
+    def test_the_limit_is_per_rule_not_per_condition(self):
+        set_waf_type("front_door")
+        six = ["AD", "AE", "AF", "AG", "AI", "AL"]
+        assert_lint(validate_rules([self._geo_rule(six, six)]), "AZ302")
+
+    def test_app_gateway_is_exempt(self):
+        set_waf_type("app_gateway")
+        codes = ["AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AT"]
+        assert_no_lint(validate_rules([self._geo_rule(codes)]), "AZ302")
+
+
+class TestJsChallengeExpirationBounds:
+    """Front Door REST spec: javascriptChallengeExpirationInMinutes is
+    bounded 5-1440."""
+
+    def _validate(self, minutes):
+        from octorules_azure._policy_settings import _validate_policy_settings
+
+        desired = {
+            "azure.waf_policy_settings": {"javascript_challenge_expiration_in_minutes": minutes}
+        }
+        errors: list[str] = []
+        _validate_policy_settings(desired, "zone", errors, [])
+        return errors
+
+    def test_bounds_pass(self):
+        assert self._validate(5) == []
+        assert self._validate(1440) == []
+
+    def test_out_of_bounds_error(self):
+        assert len(self._validate(4)) == 1
+        assert len(self._validate(1441)) == 1
+        assert "5 and 1440" in self._validate(4)[0]

@@ -24,9 +24,7 @@ AZ027 = RuleMeta(
 AZ100 = RuleMeta("AZ100", "priority", "Priority must be a positive integer", Severity.ERROR)
 AZ101 = RuleMeta("AZ101", "priority", "Duplicate priority across rules", Severity.ERROR)
 AZ102 = RuleMeta("AZ102", "priority", "Non-contiguous rule priorities", Severity.INFO)
-AZ103 = RuleMeta(
-    "AZ103", "priority", "Priority exceeds Front Door maximum of 100", Severity.WARNING
-)
+AZ103 = RuleMeta("AZ103", "priority", "Priority above 100 (octorules guidance)", Severity.WARNING)
 
 # --- AZ2xx: Action checks ---
 AZ200 = RuleMeta("AZ200", "action", "Invalid action type", Severity.ERROR)
@@ -35,6 +33,9 @@ AZ201 = RuleMeta("AZ201", "action", "Action not supported on this WAF type", Sev
 # --- AZ3xx: Match condition checks ---
 AZ300 = RuleMeta("AZ300", "match", "matchConditions must be a non-empty list", Severity.ERROR)
 AZ301 = RuleMeta("AZ301", "match", "matchConditions exceeds 10 per rule", Severity.ERROR)
+AZ302 = RuleMeta(
+    "AZ302", "match", "GeoMatch exceeds 10 country codes per rule (Front Door)", Severity.ERROR
+)
 AZ310 = RuleMeta("AZ310", "match", "Invalid matchVariable", Severity.ERROR)
 AZ311 = RuleMeta("AZ311", "match", "Invalid operator", Severity.ERROR)
 AZ312 = RuleMeta("AZ312", "match", "Missing matchValue for non-Any operator", Severity.ERROR)
@@ -56,7 +57,9 @@ AZ327 = RuleMeta("AZ327", "match", "Variable not supported on this WAF type", Se
 AZ328 = RuleMeta("AZ328", "match", "Transform not supported on this WAF type", Severity.ERROR)
 AZ330 = RuleMeta("AZ330", "match", "Redundant or conflicting transforms", Severity.WARNING)
 AZ331 = RuleMeta("AZ331", "match", "matchValue entry must be a string", Severity.ERROR)
-AZ332 = RuleMeta("AZ332", "match", "Regex pattern exceeds recommended length", Severity.WARNING)
+AZ332 = RuleMeta(
+    "AZ332", "match", "Regex pattern longer than 256 chars (octorules guidance)", Severity.WARNING
+)
 AZ333 = RuleMeta("AZ333", "match", "Transforms have no effect with this operator", Severity.WARNING)
 AZ334 = RuleMeta("AZ334", "match", "Duplicate matchValue entry", Severity.WARNING)
 AZ335 = RuleMeta("AZ335", "match", "matchValue contains an empty string", Severity.WARNING)

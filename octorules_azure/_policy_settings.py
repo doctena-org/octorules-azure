@@ -269,6 +269,16 @@ def _validate_policy_settings(desired, zone_name, errors, lines):
             f" enabled_state {enabled_state!r} (must be one of {sorted(_VALID_ENABLED_STATES)})"
         )
 
+    # Front Door REST spec (stable 2025-11-01), PolicySettings:
+    # javascriptChallengeExpirationInMinutes has minimum 5, maximum 1440.
+    js_exp = settings.get("javascript_challenge_expiration_in_minutes")
+    if js_exp is not None and (not isinstance(js_exp, int) or not 5 <= js_exp <= 1440):
+        errors.append(
+            f"  {zone_name}/azure_waf_policy_settings: invalid"
+            f" javascript_challenge_expiration_in_minutes {js_exp!r}"
+            f" (Azure accepts an integer between 5 and 1440)"
+        )
+
     rbc = settings.get("request_body_check")
     if rbc is not None and not isinstance(rbc, bool):
         errors.append(

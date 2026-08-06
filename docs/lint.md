@@ -1,6 +1,6 @@
 # Lint Rule Reference
 
-`octorules lint` performs offline static analysis of your Azure WAF rules files. **79 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
+`octorules lint` performs offline static analysis of your Azure WAF rules files. **80 rules** with the `AZ` prefix cover structure, priorities, actions, match conditions, rate limits, cross-rule analysis, best practices, and managed rule sets.
 
 These rules are registered automatically when `octorules-azure` is installed. They run alongside any core and other provider rules during `octorules lint`.
 
@@ -58,11 +58,12 @@ azure:
 | AZ100 | ERROR | priority | Priority must be a positive integer |
 | AZ101 | ERROR | priority | Duplicate priority across rules |
 | AZ102 | INFO | priority | Non-contiguous rule priorities |
-| AZ103 | WARNING | priority | Priority out of valid range for this WAF type (Front Door) |
+| AZ103 | WARNING | priority | Priority above 100 (octorules guidance) |
 | AZ200 | ERROR | action | Invalid action type |
 | AZ201 | ERROR | action | Action not supported on this WAF type |
 | AZ300 | ERROR | match | `matchConditions` must be a non-empty list |
 | AZ301 | ERROR | match | `matchConditions` exceeds 10 per rule |
+| AZ302 | ERROR | match | GeoMatch exceeds 10 country codes per rule (Front Door) |
 | AZ310 | ERROR | match | Invalid `matchVariable` |
 | AZ311 | ERROR | match | Invalid `operator` |
 | AZ312 | ERROR | match | Missing `matchValue` for non-Any operator |
@@ -84,7 +85,7 @@ azure:
 | AZ328 | ERROR | match | Transform not supported on WAF type |
 | AZ330 | WARNING | match | Redundant/conflicting transforms |
 | AZ331 | ERROR | match | matchValue entry not a string |
-| AZ332 | WARNING | match | Regex pattern too long |
+| AZ332 | WARNING | match | Regex pattern longer than 256 chars (octorules guidance) |
 | AZ333 | WARNING | match | Transforms have no effect |
 | AZ334 | WARNING | match | Duplicate matchValue entry |
 | AZ335 | WARNING | match | Empty string in matchValue |
@@ -427,23 +428,23 @@ same priority will cause a deployment error.
 Info-level notice when there are gaps in priority numbering (e.g., 1, 2, 5).
 Not an error, but may indicate a deleted rule that should be cleaned up.
 
-### AZ103 -- Priority out of valid range for Front Door WAF
+### AZ103 -- Priority above 100 (octorules guidance)
 
 **Severity:** WARNING
 
-Azure Front Door WAF requires custom rule priorities in the range 1–100. Priorities above 100 are accepted by the App Gateway API but rejected by Front Door at deployment time.
+This threshold is octorules guidance, not an Azure limit — Microsoft publishes no priority ceiling for Front Door WAF custom rules ("A unique integer… Priority numbers must be unique among all custom rules"). A policy holds at most 100 custom rules (AZ501), so priorities above 100 usually signal a numbering scheme worth a look.
 
 **Triggers on:**
 
 ```yaml
 # config.yaml: waf_type: front_door
   - ref: LowPriorityRule
-    priority: 150             # <-- exceeds Front Door maximum of 100
+    priority: 150             # <-- above the guidance threshold of 100
     action: Block
     matchConditions: [...]
 ```
 
-**Fix:** Assign a priority between 1 and 100.
+**Fix:** Nothing is required; renumber if the value was unintentional.
 
 ---
 
@@ -513,6 +514,25 @@ Azure WAF supports a maximum of 10 match conditions per rule. All conditions
 within a rule are ANDed together.
 
 **Triggers on:** A rule with 11+ entries in `matchConditions`.
+
+### AZ302 -- GeoMatch exceeds 10 country codes per rule (Front Door)
+
+**Severity:** ERROR
+
+Front Door geo-filtering: "You can only include a maximum of ten country/region codes in a single custom rule." The count is per rule, summed across the rule's `GeoMatch` conditions. Application Gateway publishes no such limit, so this rule only fires when `waf_type: front_door`.
+
+**Triggers on:**
+
+```yaml
+  - ref: BlockRegions
+    action: Block
+    matchConditions:
+      - matchVariable: RemoteAddr
+        operator: GeoMatch
+        matchValue: [AD, AE, AF, AG, AI, AL, AM, AO, AQ, AR, AT]   # 11 > 10
+```
+
+**Fix:** Split the codes across several rules, at most ten per rule.
 
 ### AZ310 -- Invalid matchVariable
 
@@ -855,9 +875,10 @@ are rejected.
 
 **Severity:** WARNING
 
-Warns when a `RegEx` pattern exceeds 256 characters. Very long patterns may
-indicate a configuration error or a pattern that should be split into
-multiple rules.
+Warns when a `RegEx` pattern exceeds 256 characters. The threshold is
+octorules guidance — neither Front Door nor Application Gateway publishes a
+regex length limit — and very long patterns often indicate a configuration
+error or a pattern that should be split into multiple rules.
 
 **Triggers on:** A `matchValue` entry with 257+ characters when `operator: RegEx`.
 

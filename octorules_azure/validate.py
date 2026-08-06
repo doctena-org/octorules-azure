@@ -44,6 +44,7 @@ RULE_IDS: frozenset[str] = frozenset(
         "AZ201",
         "AZ300",
         "AZ301",
+        "AZ302",
         "AZ310",
         "AZ311",
         "AZ312",
@@ -106,9 +107,17 @@ RULE_IDS: frozenset[str] = frozenset(
 # Azure WAF constants
 # ---------------------------------------------------------------------------
 _MAX_MATCH_CONDITIONS = 10
+# Front Door geo-filtering doc: "You can only include a maximum of ten
+# country/region codes in a single custom rule."
+_FD_MAX_GEO_COUNTRY_CODES = 10
 _MAX_STRING_MATCH_VALUES = 10
 _MAX_IP_MATCH_VALUES = 600
 _MAX_NAME_LEN = 128
+# octorules guidance, not an Azure limit: Microsoft states no priority
+# ceiling for Front Door custom rules (the current REST spec declares
+# priority as a bare integer while bounding other fields in the same
+# object).  With at most 100 custom rules per policy (AZ501), priorities
+# above 100 usually signal a numbering scheme worth a look.
 _FD_MAX_PRIORITY = 100
 _NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 
@@ -171,7 +180,8 @@ _VALID_OPERATORS = frozenset(
         "BeginsWith",
         "EndsWith",
         "RegEx",
-        # Not in current SDK (FD 1.2.0 / AG 26.0.0); forward-looking
+        # Front Door REST spec, stable 2025-10-01+ (WafPolicyCreateOrUpdate
+        # examples use it); the pinned SDKs predate it.
         "ServiceTagMatch",
     }
 )
@@ -233,6 +243,8 @@ _CONFLICTING_TRANSFORMS = frozenset(
 
 # Maximum regex pattern length (Azure doesn't document a hard limit, but
 # patterns over 256 chars are likely problematic and indicate configuration errors).
+# octorules guidance, not an Azure limit — neither WAF product publishes a
+# regex length bound.
 _MAX_REGEX_PATTERN_LEN = 256
 
 # Regexes that match every input (overly-permissive patterns).
@@ -363,13 +375,15 @@ def _check_priority(
         return
     seen_priorities.setdefault(priority, []).append(ref)
 
-    # AZ103: Front Door priority range (1-100)
+    # AZ103: octorules guidance — Azure publishes no priority ceiling.
     if _WAF_TYPE.get() == "front_door" and priority > _FD_MAX_PRIORITY:
         results.append(
             lint_result(
                 "AZ103",
                 Severity.WARNING,
-                f"Priority {priority} exceeds the Front Door maximum of {_FD_MAX_PRIORITY}",
+                f"Priority {priority} is above {_FD_MAX_PRIORITY} (octorules"
+                " guidance — Azure publishes no priority ceiling; a policy"
+                " holds at most 100 custom rules)",
                 phase,
                 ref=ref,
                 field="priority",
@@ -476,6 +490,32 @@ def _check_match_conditions(rule: dict, results: list[LintResult], phase: str, r
                 field="matchConditions",
             )
         )
+
+    # AZ302: Front Door geo-filtering — "You can only include a maximum of
+    # ten country/region codes in a single custom rule."  Per rule, so the
+    # count sums across this rule's GeoMatch conditions; App Gateway
+    # publishes no such limit.
+    if _WAF_TYPE.get() == "front_door":
+        geo_codes = sum(
+            len(c.get("matchValue"))
+            for c in conditions
+            if isinstance(c, dict)
+            and c.get("operator") == "GeoMatch"
+            and isinstance(c.get("matchValue"), list)
+        )
+        if geo_codes > _FD_MAX_GEO_COUNTRY_CODES:
+            results.append(
+                lint_result(
+                    "AZ302",
+                    Severity.ERROR,
+                    f"Rule matches {geo_codes} country/region codes across its"
+                    f" GeoMatch conditions (Front Door maximum:"
+                    f" {_FD_MAX_GEO_COUNTRY_CODES} per custom rule)",
+                    phase,
+                    ref=ref,
+                    field="matchConditions",
+                )
+            )
 
     for i, cond in enumerate(conditions):
         if not isinstance(cond, dict):
@@ -1006,7 +1046,8 @@ def _check_single_condition(
                         "AZ332",
                         Severity.WARNING,
                         f"{prefix}: regex pattern is {len(val)} chars,"
-                        f" exceeding recommended limit of {_MAX_REGEX_PATTERN_LEN}",
+                        f" exceeding {_MAX_REGEX_PATTERN_LEN} (octorules guidance"
+                        " — Azure publishes no regex length limit)",
                         phase,
                         ref=ref,
                         field=f"{prefix}.matchValue",
