@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **AZ302** (ERROR, Front Door): more than ten country/region codes across a
+  rule's GeoMatch conditions — Azure's per-rule maximum.
+- `javascript_challenge_expiration_in_minutes` is validated against Azure's
+  5–1440 range before the API call.
+
+### Changed
+- **AZ103** (priority above 100) and **AZ332** (regex length over 256) say
+  their thresholds are octorules guidance; Azure publishes neither limit.
+
 ### Fixed
 - `audit` no longer counts rules with `enabledState: Disabled`, which reported
   overlaps and drift against enforcement that does not happen.
