@@ -117,3 +117,34 @@ class TestExtractIPs:
         rules_data = {"azure.waf_custom_rules": [{"ref": "NoConditions", "action": "Block"}]}
         results = _extract_ips(rules_data, "azure.waf_custom_rules")
         assert results == []
+
+
+class TestDisabledRulesAreNotAudited:
+    """Core filters `enabled: false` centrally, but Azure's canonical
+    spelling is enabledState: "Disabled" — the extractor filters it, or a
+    switched-off rule produces overlap findings against enforcement that
+    does not happen."""
+
+    def _rule(self, ref, enabled_state):
+        return {
+            "ref": ref,
+            "action": "Block",
+            "enabledState": enabled_state,
+            "matchConditions": [
+                {
+                    "matchVariable": "RemoteAddr",
+                    "operator": "IPMatch",
+                    "matchValue": ["192.0.2.0/24"],
+                }
+            ],
+        }
+
+    def test_disabled_rule_is_skipped(self):
+        rules = {
+            "azure.waf_custom_rules": [
+                self._rule("off", "Disabled"),
+                self._rule("on", "Enabled"),
+            ]
+        }
+        infos = _extract_ips(rules, "azure.waf_custom_rules")
+        assert [i.ref for i in infos] == ["on"]

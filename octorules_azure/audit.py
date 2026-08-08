@@ -26,6 +26,12 @@ def _extract_ips(rules_data: dict, phase_name: str) -> list[RuleIPInfo]:
     for rule in rules:
         if not isinstance(rule, dict):
             continue
+        # Core's audit filters disabled rules on the universal `enabled` key,
+        # but Azure's canonical spelling is enabledState: "Disabled" — filter
+        # it here, per the convention that a provider whose rules carry their
+        # own disabled marker handles it in its extractor.
+        if str(rule.get("enabledState", "Enabled")) == "Disabled":
+            continue
         ref = str(rule.get("ref", ""))
         action = str(rule.get("action", ""))
 
