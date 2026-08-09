@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-08
 
 ### Added
 - **AZ302** (ERROR, Front Door): more than ten country/region codes across a
@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   5–1440 range before the API call.
 
 ### Changed
+- Minimum `octorules` dependency: `>=0.33.0`.
 - **AZ103** (priority above 100) and **AZ332** (regex length over 256) say
   their thresholds are octorules guidance; Azure publishes neither limit.
 
