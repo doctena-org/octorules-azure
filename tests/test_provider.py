@@ -682,30 +682,59 @@ class TestProtocolCompliance:
 
 # ---------------------------------------------------------------------------
 # Transient retry
+#
+# Transient status codes (408/429/5xx) are azure-core's job, not ours — its
+# RetryPolicy already retries them and honours Retry-After.  What this provider
+# owns is *configuring* that policy, so that is what is asserted here.  There is
+# deliberately no test that a 429 is retried: with a mock client there is no
+# azure-core pipeline in play, so such a test would only prove that a hand-rolled
+# retry loop exists, which is exactly the layer that was removed.
 # ---------------------------------------------------------------------------
 class TestTransientRetry:
-    @patch("octorules.retry.time.sleep")
-    def test_retries_on_500(self, _sleep):
-        client = MagicMock()
-        p = _make_provider(client=client)
+    def test_sdk_client_is_configured_with_bounded_retry(self):
+        """The real client is built with a capped retry, not azure-core's default 10."""
+        captured = {}
 
-        call_count = 0
+        class _Adapter:
+            def get_client(self, credential, subscription_id, **kwargs):
+                captured.update(kwargs)
+                return MagicMock()
 
-        def mock_get(*a, **kw):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                err = HttpResponseError("server error")
-                err.status_code = 500
-                raise err
-            return {"name": "p1"}
+        with (
+            patch("octorules_azure.provider.create_adapter", return_value=_Adapter()),
+            patch("azure.identity.DefaultAzureCredential", return_value=MagicMock()),
+        ):
+            AzureWafProvider(
+                subscription_id="sub-123",
+                resource_group="rg-test",
+                waf_type="front_door",
+            )
 
-        client.policies.list.side_effect = lambda rg: [mock_get()]
-        # Use resolve_zone_id which wraps with _retry_transient
-        client.policies.get.side_effect = mock_get
-        result = p.resolve_zone_id("p1")
-        assert result == "p1"
-        assert call_count == 2
+        assert captured["retry_total"] == 2
+        assert captured["retry_backoff_factor"] == 1.0
+        assert captured["retry_backoff_max"] == 60
+
+    def test_max_retries_is_forwarded_to_the_sdk(self):
+        """A caller-supplied max_retries reaches azure-core's retry policy."""
+        captured = {}
+
+        class _Adapter:
+            def get_client(self, credential, subscription_id, **kwargs):
+                captured.update(kwargs)
+                return MagicMock()
+
+        with (
+            patch("octorules_azure.provider.create_adapter", return_value=_Adapter()),
+            patch("azure.identity.DefaultAzureCredential", return_value=MagicMock()),
+        ):
+            AzureWafProvider(
+                subscription_id="sub-123",
+                resource_group="rg-test",
+                waf_type="front_door",
+                max_retries=5,
+            )
+
+        assert captured["retry_total"] == 5
 
     def test_auth_error_not_retried(self):
         client = MagicMock()
@@ -713,27 +742,6 @@ class TestTransientRetry:
         client.policies.get.side_effect = ClientAuthenticationError("bad creds")
         with pytest.raises(ProviderAuthError):
             p.resolve_zone_id("test")
-
-    @patch("octorules.retry.time.sleep")
-    def test_retries_on_429(self, _sleep):
-        client = MagicMock()
-        p = _make_provider(client=client)
-
-        call_count = 0
-
-        def mock_get(*a, **kw):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                err = HttpResponseError("throttled")
-                err.status_code = 429
-                raise err
-            return {"name": "p1"}
-
-        client.policies.get.side_effect = mock_get
-        result = p.resolve_zone_id("p1")
-        assert result == "p1"
-        assert call_count == 2
 
     def test_501_not_retried(self):
         """501 Not Implemented should propagate immediately, not retry."""

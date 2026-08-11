@@ -54,12 +54,12 @@ _ETAG_RETRIES = 3
 _ETAG_BACKOFF = (0.5, 1.0, 2.0)
 _ETAG_JITTER = 0.5
 
-# Transient error retry config for 5xx/429 (separate from ETag conflicts).
-_TRANSIENT_BACKOFF = (1.0, 2.0, 4.0)
-
-# HTTP status codes worth retrying — 429 (throttle) plus genuine server errors.
-# Notably excludes 501 Not Implemented and 505 HTTP Version Not Supported.
-_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+# Transient errors (429, 5xx, connection) are NOT retried here.  azure-core's
+# own RetryPolicy already covers them — it retries 408/429/5xx, honours
+# ``Retry-After``, and is configured at client construction below.  A second
+# retry layer on top multiplies attempts and stalls rather than adding safety.
+# ETag conflicts are different: 412 is not in azure-core's retry set, and
+# retrying one requires re-reading the policy, which is application logic.
 
 
 def _classify_azure_error(e: Exception) -> type[ProviderAuthError] | None:
@@ -71,10 +71,6 @@ def _classify_azure_error(e: Exception) -> type[ProviderAuthError] | None:
             if code in _AUTH_ERROR_CODES:
                 return ProviderAuthError
     return None
-
-
-class _NonRetryableError(Exception):
-    """Internal: wraps a non-retryable error to escape retry_with_backoff."""
 
 
 class _ETagMismatchError(ProviderError):
@@ -139,6 +135,7 @@ class AzureWafProvider:
     def __init__(
         self,
         *,
+        max_retries: int = 2,
         max_workers: int = 1,
         timeout: float | None = None,
         subscription_id: str | None = None,
@@ -177,11 +174,17 @@ class AzureWafProvider:
             from azure.identity import DefaultAzureCredential
 
             credential = DefaultAzureCredential()
+            # Retry is the SDK's job: azure-core retries 408/429/5xx and honours
+            # ``Retry-After``.  Its default of 10 total retries is far too many
+            # for a CI-driven tool, so cap it here rather than wrapping it.
             self._client = self._adapter.get_client(
                 credential,
                 self._subscription_id,
                 connection_timeout=self._timeout,
                 read_timeout=self._timeout,
+                retry_total=max_retries,
+                retry_backoff_factor=1.0,
+                retry_backoff_max=60,
             )
 
         self._max_workers = max_workers
@@ -242,40 +245,6 @@ class AzureWafProvider:
             label=f"ETag retry for {label}",
         )
 
-    def _retry_transient(self, fn, *, label: str):
-        """Call *fn* with retry on transient Azure errors.
-
-        Auth and not-found errors propagate immediately.  Only status
-        codes in ``_RETRYABLE_STATUS_CODES`` (429, 500, 502, 503, 504)
-        are retried; other errors (e.g. 501 Not Implemented) propagate.
-        """
-        # Non-retryable Azure errors (auth, not-found, 4xx client errors).
-        # These are wrapped in _NonRetryable so they escape retry_with_backoff
-        # even though they inherit from HttpResponseError.
-        _NO_RETRY = (ClientAuthenticationError, ResourceNotFoundError)
-
-        def _guarded():
-            try:
-                return fn()
-            except _NO_RETRY as e:
-                raise _NonRetryableError(e) from e
-            except HttpResponseError as e:
-                # None status_code (connection error) is deliberately retryable.
-                if e.status_code is not None and e.status_code not in _RETRYABLE_STATUS_CODES:
-                    raise _NonRetryableError(e) from e
-                raise  # retryable status codes fall through to retry
-
-        try:
-            return retry_with_backoff(
-                _guarded,
-                retryable=(HttpResponseError, ServiceRequestError, ConnectionError),
-                max_attempts=3,
-                backoff=_TRANSIENT_BACKOFF,
-                label=label,
-            )
-        except _NonRetryableError as wrapper:
-            raise wrapper.__cause__ from None
-
     # -- Zone resolution --
 
     @_wrap_provider_errors
@@ -288,10 +257,7 @@ class AzureWafProvider:
         Raises ConfigError if the policy is not found.
         """
         try:
-            policy = self._retry_transient(
-                lambda: self._adapter.get_policy(self._client, self._resource_group, zone_name),
-                label=f"resolve {zone_name}",
-            )
+            policy = self._adapter.get_policy(self._client, self._resource_group, zone_name)
         except ResourceNotFoundError:
             raise ConfigError(
                 f"WAF policy {zone_name!r} not found in resource group {self._resource_group!r}"
@@ -306,10 +272,7 @@ class AzureWafProvider:
     @_wrap_provider_errors
     def list_zones(self) -> list[str]:
         """List all WAF policy names in the resource group."""
-        result = self._retry_transient(
-            lambda: self._adapter.list_policies(self._client, self._resource_group),
-            label="list zones",
-        )
+        result = self._adapter.list_policies(self._client, self._resource_group)
         log.debug("list_zones: %d policies in %s", len(result), self._resource_group)
         return result
 
@@ -320,10 +283,7 @@ class AzureWafProvider:
         """Get rules from a WAF policy filtered by phase type."""
         if provider_id not in _AZURE_PHASE_IDS:
             return []
-        policy = self._retry_transient(
-            lambda: self._adapter.get_policy(self._client, self._resource_group, scope.zone_id),
-            label=f"get_phase_rules {scope.zone_id}",
-        )
+        policy = self._adapter.get_policy(self._client, self._resource_group, scope.zone_id)
         if provider_id == "azure_waf_managed":
             raw = self._adapter.extract_managed_rules(policy)
             result = [self._adapter.normalize_managed_rule(rs) for rs in raw]
@@ -405,10 +365,7 @@ class AzureWafProvider:
 
         log.debug("Fetching %d phase(s) for %s", len(phases_to_fetch), scope.zone_id)
         try:
-            policy = self._retry_transient(
-                lambda: self._adapter.get_policy(self._client, self._resource_group, scope.zone_id),
-                label=f"get_all_phase_rules {scope.zone_id}",
-            )
+            policy = self._adapter.get_policy(self._client, self._resource_group, scope.zone_id)
         except ClientAuthenticationError:
             raise
         except (HttpResponseError, ServiceRequestError, ConnectionError) as exc:
@@ -530,10 +487,7 @@ class AzureWafProvider:
         """Fetch and normalize policy settings for a WAF policy."""
         from octorules_azure._policy_settings import normalize_policy_settings
 
-        policy = self._retry_transient(
-            lambda: self._adapter.get_policy(self._client, self._resource_group, scope.zone_id),
-            label=f"get_policy_settings {scope.zone_id}",
-        )
+        policy = self._adapter.get_policy(self._client, self._resource_group, scope.zone_id)
         raw_settings = policy.get("policy_settings") or {}
         log.debug("GET policy_settings %s", scope.zone_id)
         return normalize_policy_settings(raw_settings, self._waf_type)
@@ -561,10 +515,7 @@ class AzureWafProvider:
         """Fetch global managed-rule exclusions for a WAF policy."""
         from octorules_azure._managed_exclusions import normalize_managed_exclusions
 
-        policy = self._retry_transient(
-            lambda: self._adapter.get_policy(self._client, self._resource_group, scope.zone_id),
-            label=f"get_managed_exclusions {scope.zone_id}",
-        )
+        policy = self._adapter.get_policy(self._client, self._resource_group, scope.zone_id)
         result = normalize_managed_exclusions(policy)
         log.debug("GET managed_exclusions %s: %d exclusions", scope.zone_id, len(result))
         return result

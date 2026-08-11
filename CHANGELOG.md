@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `max_retries` provider option (default 2), matching `octorules-aws`.
+
+### Fixed
+- Throttled and 5xx responses were retried twice over — once by azure-core's
+  own retry policy (which defaults to 10 attempts) and again by the provider —
+  multiplying a rate-limited run's request count and stall time. The provider
+  now configures azure-core's retry instead of wrapping it. ETag (412) retries
+  are unaffected.
+
 ## [0.5.0] - 2026-08-08
 
 ### Added
