@@ -1,8 +1,7 @@
 """Azure WAF audit extension -- extracts IP ranges from IPMatch conditions."""
 
-from octorules.audit import RuleIPInfo
+from octorules.audit import RuleIPInfo, iter_audit_rules
 from octorules.extensions import register_audit_extension
-from octorules.phases import PHASE_BY_NAME
 
 from octorules_azure import AZURE_PHASE_NAMES
 
@@ -13,19 +12,9 @@ def _extract_ips(rules_data: dict, phase_name: str) -> list[RuleIPInfo]:
     Finds matchConditions with ``operator=IPMatch`` and collects their
     ``matchValue`` entries as IP ranges.
     """
-    if phase_name not in AZURE_PHASE_NAMES:
-        return []
-    if phase_name not in PHASE_BY_NAME:
-        return []
-
-    rules = rules_data.get(phase_name)
-    if not isinstance(rules, list):
-        return []
 
     results: list[RuleIPInfo] = []
-    for rule in rules:
-        if not isinstance(rule, dict):
-            continue
+    for rule in iter_audit_rules(rules_data, phase_name, AZURE_PHASE_NAMES):
         # Core's audit filters disabled rules on the universal `enabled` key,
         # but Azure's canonical spelling is enabledState: "Disabled" — filter
         # it here, per the convention that a provider whose rules carry their
