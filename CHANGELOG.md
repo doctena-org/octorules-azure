@@ -5,13 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-### Changed
-- Minimum `octorules` dependency: `>=0.35.0` (for `iter_audit_rules`).
+## [0.6.0] - 2026-08-16
 
 ### Added
 - `max_retries` provider option (default 2), matching `octorules-aws`.
+
+### Changed
+- Minimum `octorules` dependency: `>=0.35.0` (for `iter_audit_rules`).
 
 ### Fixed
 - Throttled and 5xx responses were retried twice over — once by azure-core's
